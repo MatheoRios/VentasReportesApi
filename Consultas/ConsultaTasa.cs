@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 namespace VentasReportesApi;
@@ -13,6 +14,6 @@ public static class ConsultaTasa
             "SELECT TOP 1 TasaDeCambio, FechaCierre FROM KLK_CIERRE_X WHERE TasaDeCambio > 0 ORDER BY FechaCierre DESC", conn) { CommandTimeout = 10 };
         await using var rd = await cmd.ExecuteReaderAsync(ct);
         if (!await rd.ReadAsync(ct)) return null;
-        return (Convert.ToDecimal(rd.GetValue(0)), Convert.ToDateTime(rd.GetValue(1)));
+        return (Convert.ToDecimal(rd.GetValue(0), CultureInfo.InvariantCulture), Convert.ToDateTime(rd.GetValue(1), CultureInfo.InvariantCulture));
     }
 }

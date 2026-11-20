@@ -1,7 +1,7 @@
 // Guarda solo la "cáscara" de la app (HTML, estilos, fuentes, íconos) para que abra rápido.
 // Los datos (/api) NUNCA se guardan: siempre se piden al servidor.
-const VERSION = 'rpos-v11';
-const ARCHIVOS = ['./', 'index.html', 'app.css?v=7', 'app.js?v=11', 'tema.js?v=1', 'manifest.webmanifest', 'icono-192.png',
+const VERSION = 'rpos-v12';
+const ARCHIVOS = ['./', 'index.html', 'app.css?v=7', 'app.js?v=12', 'tema.js?v=1', 'manifest.webmanifest', 'icono-192.png',
   'fonts/figtree-latin-400-normal.woff2', 'fonts/figtree-latin-500-normal.woff2', 'fonts/figtree-latin-600-normal.woff2',
   'fonts/figtree-latin-700-normal.woff2', 'fonts/sora-latin-600-normal.woff2', 'fonts/sora-latin-700-normal.woff2'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting())); });

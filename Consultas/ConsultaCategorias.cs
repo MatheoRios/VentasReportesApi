@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 namespace VentasReportesApi;
@@ -13,7 +14,14 @@ namespace VentasReportesApi;
 /// </summary>
 public static class ConsultaCategorias
 {
-    private const string Sql = @"
+    internal static string ConstruirSql(Dictionary<string, string> nh, Dictionary<string, string> nl)
+    {
+        string ordenIgual = nl.ContainsKey("Orden") && nh.ContainsKey("CodApertura")
+            ? ConsultaCierres.Igual("N.Orden", ConsultaCierres.Tipo(nl, "Orden"), "NH.CodApertura", ConsultaCierres.Tipo(nh, "CodApertura"))
+            : "N.Orden = NH.CodApertura";
+        string filtroNoFiscal = nh.ContainsKey("NoFiscal") ? "\n      AND (@noFiscal IS NULL OR NH.NoFiscal = @noFiscal)" : "";
+        string filtroCredito = nh.ContainsKey("FacturaACredito") ? "\n      AND (@credito IS NULL OR NH.FacturaACredito = @credito)" : "";
+        return $@"
 SET NOCOUNT ON;
 DECLARE @ini DATETIME = @p1, @fin DATETIME = DATEADD(DAY, 1, @p2);
 DECLARE @caja NVARCHAR(30) = NULLIF(LTRIM(RTRIM(@pCaja)), N''),
@@ -40,9 +48,9 @@ WITH Lineas AS (
            -(N.TotalLinea - (ISNULL(N.MontoDescuento,0) + ISNULL(N.MontoDescuentoFidel,0) + ISNULL(N.MontoDescuentoFormPago,0))),
            -ISNULL(N.MontoImpuesto,0), -ISNULL(N.CostoBs,0)
     FROM KLK_NCREDITOHDR NH
-    INNER JOIN KLK_NCREDITOLINE N ON N.NumNota = NH.NumNota AND N.CodCaja = NH.CodCaja AND N.Orden = NH.CodApertura
+    INNER JOIN KLK_NCREDITOLINE N ON N.NumNota = NH.NumNota AND N.CodCaja = NH.CodCaja AND {ordenIgual}
     WHERE NH.FechaNota >= @ini AND NH.FechaNota < @fin
-      AND (@caja IS NULL OR NH.CodCaja = @caja)
+      AND (@caja IS NULL OR NH.CodCaja = @caja){filtroNoFiscal}{filtroCredito}
 ),
 PorArticulo AS (
     SELECT CodArticulo, SUM(Cantidad) AS Cantidad,
@@ -73,6 +81,7 @@ FROM PorArticulo P
 LEFT JOIN KLK_SAP_ARTICULO A ON A.CodArticulo = P.CodArticulo
 LEFT JOIN Stock S ON S.CodArticulo = P.CodArticulo
 OPTION (RECOMPILE);";
+    }
 
     /// <param name="noFiscal">"" = todos, "0" = solo fiscales, "1" = solo no fiscales.</param>
     /// <param name="credito">"" = todos, "0" = solo contado, "1" = solo crédito.</param>
@@ -81,19 +90,21 @@ OPTION (RECOMPILE);";
     {
         var filas = new List<object?[]>();
         await using var conn = new SqlConnection(cadena);
-        await using var cmd = new SqlCommand(Lectura.Prefijo + Sql, conn) { CommandTimeout = timeoutSeg };
+        await conn.OpenAsync(ct);
+        var nh = await ConsultaCierres.ColumnasAsync(conn, cadena, "KLK_NCREDITOHDR", timeoutSeg, ct);
+        var nl = await ConsultaCierres.ColumnasAsync(conn, cadena, "KLK_NCREDITOLINE", timeoutSeg, ct);
+        await using var cmd = new SqlCommand(Lectura.Prefijo + ConstruirSql(nh, nl), conn) { CommandTimeout = timeoutSeg };
         cmd.Parameters.AddWithValue("@p1", desde.Date);
         cmd.Parameters.AddWithValue("@p2", hasta.Date);
         cmd.Parameters.AddWithValue("@pCaja", caja ?? "");
         cmd.Parameters.AddWithValue("@pNoFiscal", noFiscal ?? "");
         cmd.Parameters.AddWithValue("@pCredito", credito ?? "");
-        await conn.OpenAsync(ct);
         await using var rd = await cmd.ExecuteReaderAsync(ct);
         while (await rd.ReadAsync(ct))
         {
             var f = new object?[12];
-            for (int i = 0; i < 4; i++) f[i] = rd.IsDBNull(i) ? "" : Convert.ToString(rd.GetValue(i))!.Trim();
-            for (int i = 4; i < 12; i++) f[i] = rd.IsDBNull(i) ? 0m : Convert.ToDecimal(rd.GetValue(i));
+            for (int i = 0; i < 4; i++) f[i] = rd.IsDBNull(i) ? "" : (Convert.ToString(rd.GetValue(i), CultureInfo.InvariantCulture) ?? "").Trim();
+            for (int i = 4; i < 12; i++) f[i] = rd.IsDBNull(i) ? 0m : Convert.ToDecimal(rd.GetValue(i), CultureInfo.InvariantCulture);
             filas.Add(f);
         }
         return filas;

@@ -81,6 +81,22 @@ public class ConcurrenciaYImportadorTests
     }
 
     [TestMethod]
+    public async Task CompartidosMantienePesoExactoAlSobrescribirYRecortar()
+    {
+        var comp = new Compartidos(pesoMaximo: 100);
+        await comp.ObtenerAsync("a", TimeSpan.FromMinutes(5), _ => Task.FromResult("v1"), _ => 40, 100, CancellationToken.None);
+        Assert.AreEqual(40, comp.PesoActual);
+
+        // al expirar o entrar otra clave, el recorte mantiene pesoActual exacto
+        await comp.ObtenerAsync("b", TimeSpan.FromMinutes(5), _ => Task.FromResult("v2"), _ => 40, 100, CancellationToken.None);
+        Assert.AreEqual(80, comp.PesoActual);
+
+        await comp.ObtenerAsync("c", TimeSpan.FromMinutes(5), _ => Task.FromResult("v3"), _ => 50, 100, CancellationToken.None);
+        Assert.IsTrue(comp.PesoActual <= 100);
+        Assert.AreEqual(90, comp.PesoActual);
+    }
+
+    [TestMethod]
     public void ChatIdPrivadoEsSimetricoEInsensibleAMayusculas()
     {
         Assert.AreEqual("dm:ana|juan", ChatApi.IdPrivado("Juan", "ANA"));

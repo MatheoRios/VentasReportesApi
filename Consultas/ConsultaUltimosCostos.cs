@@ -1,3 +1,5 @@
+using System.Data;
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 namespace VentasReportesApi;
@@ -111,6 +113,9 @@ ORDER BY 2;
 DROP TABLE #L; DROP TABLE #C;";
     }
 
+    internal static string SqlInsertLote(int cantidad) =>
+        "INSERT INTO #O VALUES " + string.Join(",", Enumerable.Range(0, cantidad).Select(i => $"(@n{i},@c{i})")) + ";";
+
     private static readonly System.Text.RegularExpressions.Regex ReOdc =
         new(@"\bODC\s*(?:N[°º.]?\s*)?(\d{3,})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     private static readonly System.Text.RegularExpressions.Regex ReRecepcion =
@@ -158,7 +163,7 @@ DROP TABLE #L; DROP TABLE #C;";
         for (int i = 0; i < filas.Count; i++)
         {
             var f = filas[i];
-            string o = Convert.ToString(f[25]) ?? "", rel = (Convert.ToString(f[26]) ?? "").Trim();
+            string o = Convert.ToString(f[25], CultureInfo.InvariantCulture) ?? "", rel = (Convert.ToString(f[26], CultureInfo.InvariantCulture) ?? "").Trim();
             var mr = ReRecepcion.Match(o);
             var mo2 = ReOdc.Match(o);
             string odc = mo2.Success ? mo2.Groups[1].Value : (rel.Length >= 3 && rel.All(char.IsDigit) && rel.Trim('0') != "" ? rel : "");
@@ -166,7 +171,8 @@ DROP TABLE #L; DROP TABLE #C;";
             Array.Copy(f, g, 25);
             g[25] = mr.Success ? mr.Groups[1].Value : ""; g[26] = odc; g[27] = 0m;
             filas[i] = g;
-            if (odc != "" && long.TryParse(odc, out long n)) pares.Add((i, n, Convert.ToString(f[0]) ?? ""));
+            if (odc != "" && long.TryParse(odc, NumberStyles.Integer, CultureInfo.InvariantCulture, out long n))
+                pares.Add((i, n, Convert.ToString(f[0], CultureInfo.InvariantCulture) ?? ""));
         }
         if (pares.Count > 0)
         {
@@ -175,20 +181,34 @@ DROP TABLE #L; DROP TABLE #C;";
                 var tr = await ConsultaCierres.ColumnasAsync(conn, cadena, "TR_ODC", timeoutSeg, ct);
                 if (tr.ContainsKey("c_Documento") && tr.ContainsKey("c_CodArticulo") && tr.ContainsKey("n_Costo"))
                 {
-                    var sb = new System.Text.StringBuilder("SET NOCOUNT ON;\nCREATE TABLE #O (Num BIGINT, Cod NVARCHAR(50) COLLATE DATABASE_DEFAULT);\n");
-                    foreach (var lote in pares.Select(x => (x.Odc, x.Cod)).Distinct().Chunk(900))
-                        sb.Append("INSERT INTO #O VALUES ").Append(string.Join(",", lote.Select(x => $"({x.Odc},N'{x.Cod.Replace("'", "''")}')"))).Append(";\n");
+                    await using (var createCmd = new SqlCommand(Lectura.Prefijo +
+                        "CREATE TABLE #O (Num BIGINT, Cod NVARCHAR(50) COLLATE DATABASE_DEFAULT);", conn) { CommandTimeout = timeoutSeg })
+                    {
+                        await createCmd.ExecuteNonQueryAsync(ct);
+                    }
+                    foreach (var lote in pares.Select(x => (x.Odc, x.Cod)).Distinct().Chunk(400))
+                    {
+                        await using var insCmd = new SqlCommand(SqlInsertLote(lote.Length), conn) { CommandTimeout = timeoutSeg };
+                        for (int k = 0; k < lote.Length; k++)
+                        {
+                            insCmd.Parameters.Add("@n" + k, SqlDbType.BigInt).Value = lote[k].Odc;
+                            insCmd.Parameters.Add("@c" + k, SqlDbType.NVarChar, 50).Value = lote[k].Cod;
+                        }
+                        await insCmd.ExecuteNonQueryAsync(ct);
+                    }
                     string origen = tr.ContainsKey("cs_CodLocalidad") ? " AND T.cs_CodLocalidad = @origen" : "";
-                    sb.Append($@"SELECT O.Num, O.Cod, CAST(MAX(T.n_Costo) AS DECIMAL(19,4))
+                    string sqlCostos = Lectura.Prefijo + $@"SET NOCOUNT ON;
+SELECT O.Num, O.Cod, CAST(MAX(T.n_Costo) AS DECIMAL(19,4))
 FROM #O O JOIN TR_ODC T ON TRY_CONVERT(BIGINT, T.c_Documento) = O.Num AND LTRIM(RTRIM(T.c_CodArticulo)) = O.Cod{origen}
 GROUP BY O.Num, O.Cod;
-DROP TABLE #O;");
+DROP TABLE #O;";
                     var costos = new Dictionary<(long, string), decimal>();
-                    await using var cmd2 = new SqlCommand(Lectura.Prefijo + sb, conn) { CommandTimeout = timeoutSeg };
-                    cmd2.Parameters.AddWithValue("@origen", origenOdc);
+                    await using var cmd2 = new SqlCommand(sqlCostos, conn) { CommandTimeout = timeoutSeg };
+                    if (tr.ContainsKey("cs_CodLocalidad")) cmd2.Parameters.Add("@origen", SqlDbType.NVarChar, 50).Value = origenOdc;
                     await using var rd2 = await cmd2.ExecuteReaderAsync(ct);
                     while (await rd2.ReadAsync(ct))
-                        costos[(Convert.ToInt64(rd2.GetValue(0)), Convert.ToString(rd2.GetValue(1)) ?? "")] = rd2.IsDBNull(2) ? 0m : Convert.ToDecimal(rd2.GetValue(2));
+                        costos[(Convert.ToInt64(rd2.GetValue(0), CultureInfo.InvariantCulture), Convert.ToString(rd2.GetValue(1), CultureInfo.InvariantCulture) ?? "")] =
+                            rd2.IsDBNull(2) ? 0m : Convert.ToDecimal(rd2.GetValue(2), CultureInfo.InvariantCulture);
                     foreach (var p in pares)
                         if (costos.TryGetValue((p.Odc, p.Cod), out var cto)) filas[p.Fila][27] = cto;
                 }

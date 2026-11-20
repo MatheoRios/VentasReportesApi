@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 namespace VentasReportesApi;
@@ -49,7 +50,7 @@ public static class ConsultaCierres
         {
             cmd.Parameters.AddWithValue("@t", "dbo." + tabla);
             await using var rd = await cmd.ExecuteReaderAsync(ct);
-            while (await rd.ReadAsync(ct)) set[Convert.ToString(rd.GetValue(0))!] = (Convert.ToString(rd.GetValue(1)) ?? "").ToLowerInvariant();
+            while (await rd.ReadAsync(ct)) set[Convert.ToString(rd.GetValue(0), CultureInfo.InvariantCulture)!] = (Convert.ToString(rd.GetValue(1), CultureInfo.InvariantCulture) ?? "").ToLowerInvariant();
         }
         if (set.Count > 0) columnas[clave] = (set, DateTime.UtcNow);
         return set;
@@ -76,8 +77,8 @@ public static class ConsultaCierres
         : EsTexto(tipoD) ? $"CONVERT(NVARCHAR(60), C.[{col}])"
         : $"TRY_CONVERT({(tipoD is "decimal" or "numeric" ? "DECIMAL(38,0)" : "BIGINT")}, C.[{col}])";
 
-    private static string SqlCierres(Dictionary<string, string> t, Dictionary<string, string> den, Dictionary<string, string> usu,
-                                     Dictionary<string, string> fh, Dictionary<string, string> nh, Dictionary<string, string> nl)
+    internal static string SqlCierres(Dictionary<string, string> t, Dictionary<string, string> den, Dictionary<string, string> usu,
+                                      Dictionary<string, string> fh, Dictionary<string, string> nh, Dictionary<string, string> nl)
     {
         // montos: solo columnas numéricas (si alguna fuera texto se intenta convertir; lo que no se pueda sale en 0)
         string N(string col) => !t.TryGetValue(col, out var ty) ? "0"
@@ -148,6 +149,27 @@ ORDER BY MIN(FH.FechaFactura);";
         return $@"
 SET NOCOUNT ON;
 DECLARE @ini DATETIME = @p1, @fin DATETIME = DATEADD(DAY, 1, @p2);
+SELECT CAST(FH.FechaFactura AS DATE) AS Dia, FH.CodCaja, FH.CodigoVendedorPOS,
+       COUNT(DISTINCT FH.NumFactura) AS Docs,
+       SUM(ISNULL(FL.TotalLineaUsd,0) + ISNULL(FL.IVAUSD,0)
+           - (ISNULL(FL.DescuentoUSD,0) + ISNULL(FL.MontoDescuentoFidelUsd,0) + ISNULL(FL.MontoDescuentoFormPagoUsd,0))) AS Usd
+INTO #F
+FROM KLK_FACTURAHDR FH
+JOIN KLK_FACTURALINE FL ON FL.NumFactura = FH.NumFactura AND FL.CodCaja = FH.CodCaja AND FL.CodApertura = FH.CodApertura
+WHERE FH.EnEspera = 0 AND FH.FechaFactura >= @ini AND FH.FechaFactura < @fin
+GROUP BY CAST(FH.FechaFactura AS DATE), FH.CodCaja, FH.CodigoVendedorPOS;
+
+SELECT CAST(NH.FechaNota AS DATE) AS Dia, NH.CodCaja, NH.CodigoVendedorPOS,
+       COUNT(DISTINCT NH.NumNota) AS Docs,
+       SUM(ISNULL(NL.TotalLineaUsd,0) + ISNULL(NL.IVAUSD,0)
+           - (ISNULL(NL.DescuentoUSD,0) + ISNULL(NL.MontoDescuentoFidelUsd,0) + ISNULL(NL.MontoDescuentoFormPagoUsd,0))) AS Usd
+INTO #N
+FROM KLK_NCREDITOHDR NH
+JOIN KLK_NCREDITOLINE NL ON NL.NumNota = NH.NumNota AND NL.CodCaja = NH.CodCaja
+                        AND {Igual("NH.CodApertura", Tipo(nh, "CodApertura"), "NL.Orden", Tipo(nl, "Orden"))}
+WHERE NH.FechaNota >= @ini AND NH.FechaNota < @fin
+GROUP BY CAST(NH.FechaNota AS DATE), NH.CodCaja, NH.CodigoVendedorPOS;
+
 SELECT {nro}, CONVERT(CHAR(19), C.FechaCierre, 120), {S("CodCaja")}, {S("CodApertura")},
        {S("CodVendedorPOS")}, ISNULL(U.Nombre, N''), {N("TasaDeCambio")},
        {enviado}, {enviadoStda},
@@ -159,31 +181,16 @@ SELECT {nro}, CONVERT(CHAR(19), C.FechaCierre, 120), {S("CodCaja")}, {S("CodAper
 FROM {TablaCierres} C
 LEFT JOIN KLK_USUARIOS U ON {Igual("U.Id_Usuario", Tipo(usu, "Id_Usuario"), vendedor, Tipo(t, "CodVendedorPOS"))}{billetes}
 -- Recaudado según documentos (mismo criterio que getVentasPosStore: caja + cajero + día del cierre),
--- en USD con la fórmula de las ventas; el procedimiento original restaba descuentos USD a montos en Bs.
-CROSS APPLY (SELECT CAST(C.FechaCierre AS DATE) AS Dia, DATEADD(DAY, 1, CAST(C.FechaCierre AS DATE)) AS Sig) T
-OUTER APPLY (
-    SELECT COUNT(DISTINCT FH.NumFactura) AS Docs,
-           SUM(ISNULL(FL.TotalLineaUsd,0) + ISNULL(FL.IVAUSD,0)
-               - (ISNULL(FL.DescuentoUSD,0) + ISNULL(FL.MontoDescuentoFidelUsd,0) + ISNULL(FL.MontoDescuentoFormPagoUsd,0))) AS Usd
-    FROM KLK_FACTURAHDR FH
-    JOIN KLK_FACTURALINE FL ON FL.NumFactura = FH.NumFactura AND FL.CodCaja = FH.CodCaja AND FL.CodApertura = FH.CodApertura
-    WHERE {Igual("FH.CodCaja", Tipo(fh, "CodCaja"), "C.CodCaja", Tipo(t, "CodCaja"))}
-      AND {Igual("FH.CodigoVendedorPOS", Tipo(fh, "CodigoVendedorPOS"), vendedor, Tipo(t, "CodVendedorPOS"))} AND FH.EnEspera = 0
-      AND FH.FechaFactura >= T.Dia AND FH.FechaFactura < T.Sig
-) F
-OUTER APPLY (
-    SELECT COUNT(DISTINCT NH.NumNota) AS Docs,
-           SUM(ISNULL(NL.TotalLineaUsd,0) + ISNULL(NL.IVAUSD,0)
-               - (ISNULL(NL.DescuentoUSD,0) + ISNULL(NL.MontoDescuentoFidelUsd,0) + ISNULL(NL.MontoDescuentoFormPagoUsd,0))) AS Usd
-    FROM KLK_NCREDITOHDR NH
-    JOIN KLK_NCREDITOLINE NL ON NL.NumNota = NH.NumNota AND NL.CodCaja = NH.CodCaja
-                            AND {Igual("NH.CodApertura", Tipo(nh, "CodApertura"), "NL.Orden", Tipo(nl, "Orden"))}
-    WHERE {Igual("NH.CodCaja", Tipo(nh, "CodCaja"), "C.CodCaja", Tipo(t, "CodCaja"))}
-      AND {Igual("NH.CodigoVendedorPOS", Tipo(nh, "CodigoVendedorPOS"), vendedor, Tipo(t, "CodVendedorPOS"))}
-      AND NH.FechaNota >= T.Dia AND NH.FechaNota < T.Sig
-) N
+-- pre-agregado en #F y #N una sola vez para todo el rango en lugar de subconsultas por cierre.
+LEFT JOIN #F F ON F.Dia = CAST(C.FechaCierre AS DATE)
+              AND {Igual("F.CodCaja", Tipo(fh, "CodCaja"), "C.CodCaja", Tipo(t, "CodCaja"))}
+              AND {Igual("F.CodigoVendedorPOS", Tipo(fh, "CodigoVendedorPOS"), vendedor, Tipo(t, "CodVendedorPOS"))}
+LEFT JOIN #N N ON N.Dia = CAST(C.FechaCierre AS DATE)
+              AND {Igual("N.CodCaja", Tipo(nh, "CodCaja"), "C.CodCaja", Tipo(t, "CodCaja"))}
+              AND {Igual("N.CodigoVendedorPOS", Tipo(nh, "CodigoVendedorPOS"), vendedor, Tipo(t, "CodVendedorPOS"))}
 WHERE C.FechaCierre >= @ini AND C.FechaCierre < @fin
 ORDER BY C.FechaCierre, C.CodCaja;
+DROP TABLE #F; DROP TABLE #N;
 {arqueos}
 {sinCierre}";
     }
@@ -212,23 +219,26 @@ ORDER BY C.FechaCierre, C.CodCaja;
         while (await rd.ReadAsync(ct))
         {
             var f = new object?[rd.FieldCount];
-            for (int i = 0; i < 6; i++) f[i] = rd.IsDBNull(i) ? "" : Convert.ToString(rd.GetValue(i))!.Trim();
-            for (int i = 6; i < rd.FieldCount; i++) f[i] = rd.IsDBNull(i) ? 0m : Convert.ToDecimal(rd.GetValue(i));
+            for (int i = 0; i < 6; i++) f[i] = rd.IsDBNull(i) ? "" : (Convert.ToString(rd.GetValue(i), CultureInfo.InvariantCulture) ?? "").Trim();
+            for (int i = 6; i < rd.FieldCount; i++) f[i] = rd.IsDBNull(i) ? 0m : Convert.ToDecimal(rd.GetValue(i), CultureInfo.InvariantCulture);
             cierres.Add(f);
         }
         if (await rd.NextResultAsync(ct))
             while (await rd.ReadAsync(ct))
                 arqueos.Add(new object?[]
                 {
-                    Convert.ToString(rd.GetValue(0))!.Trim(), Convert.ToString(rd.GetValue(1))!.Trim(),
-                    Convert.ToDecimal(rd.GetValue(2)), Convert.ToDecimal(rd.GetValue(3)), Convert.ToDecimal(rd.GetValue(4))
+                    (Convert.ToString(rd.GetValue(0), CultureInfo.InvariantCulture) ?? "").Trim(),
+                    (Convert.ToString(rd.GetValue(1), CultureInfo.InvariantCulture) ?? "").Trim(),
+                    Convert.ToDecimal(rd.GetValue(2), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(rd.GetValue(3), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(rd.GetValue(4), CultureInfo.InvariantCulture)
                 });
         if (await rd.NextResultAsync(ct))
             while (await rd.ReadAsync(ct))
             {
                 var f = new object?[9];
-                for (int i = 0; i < 6; i++) f[i] = rd.IsDBNull(i) ? "" : Convert.ToString(rd.GetValue(i))!.Trim();
-                for (int i = 6; i < 9; i++) f[i] = rd.IsDBNull(i) ? 0m : Convert.ToDecimal(rd.GetValue(i));
+                for (int i = 0; i < 6; i++) f[i] = rd.IsDBNull(i) ? "" : (Convert.ToString(rd.GetValue(i), CultureInfo.InvariantCulture) ?? "").Trim();
+                for (int i = 6; i < 9; i++) f[i] = rd.IsDBNull(i) ? 0m : Convert.ToDecimal(rd.GetValue(i), CultureInfo.InvariantCulture);
                 sinCierre.Add(f);
             }
         bool disponible = t.ContainsKey("CodApertura") && fh.ContainsKey("CodApertura") && fh.ContainsKey("CodigoVendedorPOS");

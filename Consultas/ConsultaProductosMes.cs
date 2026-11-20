@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 namespace VentasReportesApi;
@@ -14,7 +15,12 @@ public sealed record ResultadoProductosMes(List<object?[]> Meses, List<object?[]
 /// </summary>
 public static class ConsultaProductosMes
 {
-    private const string SqlLineas = @"
+    internal static string ConstruirSqlLineas(Dictionary<string, string> nh, Dictionary<string, string> nl)
+    {
+        string ordenIgual = nl.ContainsKey("Orden") && nh.ContainsKey("CodApertura")
+            ? ConsultaCierres.Igual("N.Orden", ConsultaCierres.Tipo(nl, "Orden"), "NH.CodApertura", ConsultaCierres.Tipo(nh, "CodApertura"))
+            : "N.Orden = NH.CodApertura";
+        return $@"
 SET NOCOUNT ON;
 DECLARE @ini DATETIME = @p1, @fin DATETIME = DATEADD(DAY, 1, @p2);
 
@@ -37,7 +43,7 @@ SELECT CAST(N.CodArticulo AS NVARCHAR(60)), DATEFROMPARTS(YEAR(NH.FechaNota), MO
        -(N.TotalLineaUsd + ISNULL(N.IvaUSD,0) - (ISNULL(N.DescuentoUSD,0) + ISNULL(N.MontoDescuentoFidelUsd,0) + ISNULL(N.MontoDescuentoFormPagoUsd,0))),
        0, CAST(NH.FechaNota AS DATE), 1, NULL, NULL
 FROM KLK_NCREDITOHDR NH
-INNER JOIN KLK_NCREDITOLINE N ON N.NumNota = NH.NumNota AND N.CodCaja = NH.CodCaja AND N.Orden = NH.CodApertura
+INNER JOIN KLK_NCREDITOLINE N ON N.NumNota = NH.NumNota AND N.CodCaja = NH.CodCaja AND {ordenIgual}
 WHERE NH.FechaNota >= @ini AND NH.FechaNota < @fin;
 
 -- 1) ventas por artículo y mes
@@ -45,6 +51,7 @@ SELECT CodArticulo, CONVERT(CHAR(7), Mes, 126), CAST(SUM(Cantidad) AS DECIMAL(18
 FROM #L
 GROUP BY CodArticulo, Mes;
 ";
+    }
 
     // campo del modelo → columnas posibles en KLK_SAP_ARTICULO (la primera que exista)
     public static readonly (string Campo, string[] Columnas)[] CamposMaestro =
@@ -78,11 +85,14 @@ GROUP BY CodArticulo, Mes;
         await using var conn = new SqlConnection(cadena);
         await conn.OpenAsync(ct);
 
+        var nh = await ConsultaCierres.ColumnasAsync(conn, cadena, "KLK_NCREDITOHDR", timeoutSeg, ct);
+        var nl = await ConsultaCierres.ColumnasAsync(conn, cadena, "KLK_NCREDITOLINE", timeoutSeg, ct);
+
         // columnas del maestro (una vez por conexión: es una consulta muy liviana)
         var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         await using (var c = new SqlCommand("SELECT name FROM sys.columns WHERE object_id = OBJECT_ID('dbo.KLK_SAP_ARTICULO')", conn) { CommandTimeout = 30 })
         await using (var r = await c.ExecuteReaderAsync(ct))
-            while (await r.ReadAsync(ct)) cols.Add(Convert.ToString(r.GetValue(0))!);
+            while (await r.ReadAsync(ct)) cols.Add(Convert.ToString(r.GetValue(0), CultureInfo.InvariantCulture)!);
         var extras = CamposMaestro.Select(cm =>
         {
             var col = cm.Columnas.FirstOrDefault(cols.Contains);
@@ -95,7 +105,7 @@ GROUP BY CodArticulo, Mes;
         string inactivos = cols.Contains("Estatus")
             ? "SELECT CAST(CodArticulo AS NVARCHAR(60)) FROM KLK_SAP_ARTICULO WHERE CONVERT(NVARCHAR(10), Estatus) IN (N'1', N'I', N'INACTIVO', N'True');"
             : "SELECT TOP 0 N'';";
-        string sql = Lectura.Prefijo + SqlLineas + $@"
+        string sql = Lectura.Prefijo + ConstruirSqlLineas(nh, nl) + $@"
 -- 2) ficha de los artículos vendidos (las existencias no se usan) + gravable según las ventas + datos del maestro
 SELECT X.CodArticulo,
        ISNULL(A.NomArticulo, N'(no está en el maestro)'),
@@ -140,27 +150,29 @@ DROP TABLE #L;";
         while (await rd.ReadAsync(ct))
             meses.Add(new object?[]
             {
-                Convert.ToString(rd.GetValue(0))!.Trim(), Convert.ToString(rd.GetValue(1))!.Trim(),
-                rd.IsDBNull(2) ? 0m : Convert.ToDecimal(rd.GetValue(2)), rd.IsDBNull(3) ? 0m : Convert.ToDecimal(rd.GetValue(3))
+                (Convert.ToString(rd.GetValue(0), CultureInfo.InvariantCulture) ?? "").Trim(),
+                (Convert.ToString(rd.GetValue(1), CultureInfo.InvariantCulture) ?? "").Trim(),
+                rd.IsDBNull(2) ? 0m : Convert.ToDecimal(rd.GetValue(2), CultureInfo.InvariantCulture),
+                rd.IsDBNull(3) ? 0m : Convert.ToDecimal(rd.GetValue(3), CultureInfo.InvariantCulture)
             });
         if (await rd.NextResultAsync(ct))
             while (await rd.ReadAsync(ct))
             {
                 var f = new object?[rd.FieldCount];
-                for (int i = 0; i < 4; i++) f[i] = rd.IsDBNull(i) ? "" : Convert.ToString(rd.GetValue(i))!.Trim();
-                f[4] = rd.IsDBNull(4) ? 0m : Convert.ToDecimal(rd.GetValue(4));
-                f[5] = rd.IsDBNull(5) ? 0 : Convert.ToInt32(rd.GetValue(5));
-                for (int i = 6; i < rd.FieldCount; i++) f[i] = rd.IsDBNull(i) ? "" : Convert.ToString(rd.GetValue(i))!.Trim();
+                for (int i = 0; i < 4; i++) f[i] = rd.IsDBNull(i) ? "" : (Convert.ToString(rd.GetValue(i), CultureInfo.InvariantCulture) ?? "").Trim();
+                f[4] = rd.IsDBNull(4) ? 0m : Convert.ToDecimal(rd.GetValue(4), CultureInfo.InvariantCulture);
+                f[5] = rd.IsDBNull(5) ? 0 : Convert.ToInt32(rd.GetValue(5), CultureInfo.InvariantCulture);
+                for (int i = 6; i < rd.FieldCount; i++) f[i] = rd.IsDBNull(i) ? "" : (Convert.ToString(rd.GetValue(i), CultureInfo.InvariantCulture) ?? "").Trim();
                 arts.Add(f);
             }
         var bloq = new List<string>();
         if (await rd.NextResultAsync(ct))
             while (await rd.ReadAsync(ct))
-                if (!rd.IsDBNull(0)) bloq.Add(Convert.ToString(rd.GetValue(0))!.Trim());
+                if (!rd.IsDBNull(0)) bloq.Add((Convert.ToString(rd.GetValue(0), CultureInfo.InvariantCulture) ?? "").Trim());
         var inac = new List<string>();
         if (await rd.NextResultAsync(ct))
             while (await rd.ReadAsync(ct))
-                if (!rd.IsDBNull(0)) inac.Add(Convert.ToString(rd.GetValue(0))!.Trim());
+                if (!rd.IsDBNull(0)) inac.Add((Convert.ToString(rd.GetValue(0), CultureInfo.InvariantCulture) ?? "").Trim());
         // los campos que empiezan con "_" no son del maestro: estadística de lo facturado en esta tienda (IVA, último precio)
         return new ResultadoProductosMes(meses, arts,
             CamposMaestro.Select(c => c.Campo).Concat(new[] { "_LineasFac", "_LineasIva", "_UltIva", "_UltSinIva", "_EjIva", "_EjSinIva", "_UltVenta", "_PrecioUlt", "_FechaPrecio" }).ToArray(),

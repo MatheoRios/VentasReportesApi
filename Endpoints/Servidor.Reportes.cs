@@ -221,26 +221,38 @@ public sealed partial class Servidor
             {
                 c = tasaCache;
                 if (c.HasValue && c.Value.Leida > DateTime.UtcNow.AddMinutes(-10))
-                    return Results.Ok(new { tasa = c.Value.Tasa, fecha = c.Value.Fecha.ToString("yyyy-MM-dd HH:mm"), tienda = c.Value.Tienda });
-                string ultimoError = "ninguna tienda disponible";
-                foreach (var suc in Permitidas(u).Take(4))
+                    return Results.Ok(new { tasa = c.Value.Tasa, fecha = c.Value.Fecha.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture), tienda = c.Value.Tienda });
+                var candidatos = Permitidas(u).Take(4)
+                    .Select(suc => (Suc: suc, Cadena: CadenaDeTienda(suc)))
+                    .Where(x => x.Cadena != null)
+                    .ToList();
+                if (candidatos.Count == 0)
+                    return Error(502, "No se pudo leer la tasa (ninguna tienda disponible).");
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
+                cts.CancelAfter(TimeSpan.FromSeconds(12));
+                var pendientes = candidatos.Select(async x =>
                 {
-                    string? cadenaSuc = CadenaDeTienda(suc);
-                    if (cadenaSuc == null) continue;
-                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
-                    cts.CancelAfter(TimeSpan.FromSeconds(12));
+                    var leida = await ConsultaTasa.UltimaAsync(x.Cadena!, cts.Token);
+                    return (x.Suc, Leida: leida);
+                }).ToList();
+                string ultimoError = "ninguna tienda disponible";
+                while (pendientes.Count > 0)
+                {
+                    var terminada = await Task.WhenAny(pendientes);
+                    pendientes.Remove(terminada);
                     try
                     {
-                        var leida = await ConsultaTasa.UltimaAsync(cadenaSuc, cts.Token);
+                        var (suc, leida) = await terminada;
                         if (leida.HasValue)
                         {
+                            cts.Cancel();
                             var t = (leida.Value.Tasa, leida.Value.Fecha, suc, DateTime.UtcNow);
                             tasaCache = t;
-                            return Results.Ok(new { tasa = t.Item1, fecha = t.Item2.ToString("yyyy-MM-dd HH:mm"), tienda = suc });
+                            return Results.Ok(new { tasa = t.Item1, fecha = t.Item2.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture), tienda = suc });
                         }
                         ultimoError = $"{suc} no tiene cierres con tasa";
                     }
-                    catch (Exception ex) when (!ctx.RequestAborted.IsCancellationRequested) { ultimoError = $"{suc}: {ex.Message}"; }
+                    catch (Exception ex) when (!ctx.RequestAborted.IsCancellationRequested) { ultimoError = ConsultaSucursal.MensajeAmigable(ex); }
                 }
                 return Error(502, "No se pudo leer la tasa (" + ultimoError + ").");
             }

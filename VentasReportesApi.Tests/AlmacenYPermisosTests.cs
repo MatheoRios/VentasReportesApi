@@ -104,4 +104,34 @@ public class AlmacenYPermisosTests
         var asignadas = db.SucursalesDe(u.Id);
         CollectionAssert.AreEqual(new[] { "BOSQUE_SUR" }, asignadas);
     }
+
+    [TestMethod]
+    public void MigrarEsIdempotenteYOperacionesTiendaSonCaseInsensitiveYCreanIndicesChat()
+    {
+        // Segunda llamada no falla y mantiene integridad
+        db.Migrar();
+
+        db.CrearUsuario("marta", "Marta Díaz", "TIENDA", "ClaveSegura1");
+        var u = db.ObtenerUsuario("marta")!;
+        db.CrearTienda(new Tienda { Nombre = "CENTENARIO", Servidor = "10.0.0.2", BaseDatos = "POS", Usuario = "usr" }, "cif");
+        db.CrearTienda(new Tienda { Nombre = "TIENDA_B", Servidor = "10.0.0.3", BaseDatos = "POS", Usuario = "usr" }, "cif");
+        db.AsignarSucursales(u.Id, new[] { "CENTENARIO", "TIENDA_B" }, true);
+
+        db.QuitarSucursales(u.Id, new[] { "tienda_b" });
+        CollectionAssert.AreEqual(new[] { "CENTENARIO" }, db.SucursalesDe(u.Id));
+
+        db.EliminarTienda("centenario");
+        Assert.AreEqual(0, db.SucursalesDe(u.Id).Count);
+        Assert.IsNull(db.ObtenerTienda("CENTENARIO"));
+
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + Path.Combine(tempDir, "seguridad.db"));
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='index' AND name IN ('IX_Chat_Fecha', 'IX_ChatArchivos_MensajeId')";
+        var indices = new List<string>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) indices.Add(r.GetString(0));
+        CollectionAssert.Contains(indices, "IX_Chat_Fecha");
+        CollectionAssert.Contains(indices, "IX_ChatArchivos_MensajeId");
+    }
 }

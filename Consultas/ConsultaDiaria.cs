@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 namespace VentasReportesApi;
@@ -9,7 +10,12 @@ namespace VentasReportesApi;
 /// </summary>
 public static class ConsultaDiaria
 {
-    private const string Sql = @"
+    internal static string ConstruirSql(Dictionary<string, string> nh, Dictionary<string, string> nl)
+    {
+        string ordenIgual = nl.ContainsKey("Orden") && nh.ContainsKey("CodApertura")
+            ? ConsultaCierres.Igual("NH.CodApertura", ConsultaCierres.Tipo(nh, "CodApertura"), "NL.Orden", ConsultaCierres.Tipo(nl, "Orden"))
+            : "NH.CodApertura = NL.Orden";
+        return $@"
 SET NOCOUNT ON;
 DECLARE @ini DATETIME = @p1, @fin DATETIME = DATEADD(DAY, 1, @p2);
 WITH Fac AS (
@@ -36,7 +42,7 @@ NcMonto AS (
     SELECT CAST(NH.FechaNota AS DATE) AS Dia,
            SUM(NL.TotalLineaUsd + NL.IVAUSD - (ISNULL(NL.DescuentoUSD,0) + ISNULL(NL.MontoDescuentoFidelUsd,0) + ISNULL(NL.MontoDescuentoFormPagoUsd,0))) AS Dev
     FROM KLK_NCREDITOHDR NH
-    INNER JOIN KLK_NCREDITOLINE NL ON NH.NumNota = NL.NumNota AND NH.CodCaja = NL.CodCaja AND NH.CodApertura = NL.Orden
+    INNER JOIN KLK_NCREDITOLINE NL ON NH.NumNota = NL.NumNota AND NH.CodCaja = NL.CodCaja AND {ordenIgual}
     WHERE NH.FechaNota >= @ini AND NH.FechaNota < @fin
     GROUP BY CAST(NH.FechaNota AS DATE)
 ),
@@ -55,21 +61,28 @@ LEFT JOIN FacMonto FM ON FM.Dia = D.Dia
 LEFT JOIN Nc N        ON N.Dia = D.Dia
 LEFT JOIN NcMonto NM  ON NM.Dia = D.Dia
 ORDER BY D.Dia;";
+    }
 
     public static async Task<List<object?[]>> EjecutarAsync(string cadena, DateTime desde, DateTime hasta, int timeoutSeg, CancellationToken ct)
     {
         var filas = new List<object?[]>();
         await using var conn = new SqlConnection(cadena);
-        await using var cmd = new SqlCommand(Lectura.Prefijo + Sql, conn) { CommandTimeout = timeoutSeg };
+        await conn.OpenAsync(ct);
+        var nh = await ConsultaCierres.ColumnasAsync(conn, cadena, "KLK_NCREDITOHDR", timeoutSeg, ct);
+        var nl = await ConsultaCierres.ColumnasAsync(conn, cadena, "KLK_NCREDITOLINE", timeoutSeg, ct);
+        await using var cmd = new SqlCommand(Lectura.Prefijo + ConstruirSql(nh, nl), conn) { CommandTimeout = timeoutSeg };
         cmd.Parameters.AddWithValue("@p1", desde.Date);
         cmd.Parameters.AddWithValue("@p2", hasta.Date);
-        await conn.OpenAsync(ct);
         await using var rd = await cmd.ExecuteReaderAsync(ct);
         while (await rd.ReadAsync(ct))
             filas.Add(new object?[]
             {
-                Convert.ToString(rd.GetValue(0))!.Trim(), Convert.ToInt32(rd.GetValue(1)), Convert.ToInt32(rd.GetValue(2)),
-                Convert.ToDecimal(rd.GetValue(3)), Convert.ToDecimal(rd.GetValue(4)), Convert.ToDecimal(rd.GetValue(5))
+                (Convert.ToString(rd.GetValue(0), CultureInfo.InvariantCulture) ?? "").Trim(),
+                Convert.ToInt32(rd.GetValue(1), CultureInfo.InvariantCulture),
+                Convert.ToInt32(rd.GetValue(2), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(rd.GetValue(3), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(rd.GetValue(4), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(rd.GetValue(5), CultureInfo.InvariantCulture)
             });
         return filas;
     }

@@ -1,7 +1,10 @@
 bin/
 obj/
 .vs/
-datos/
+datos/*.db*
+datos/*.key
+datos/adjuntos/
+datos/complemento/
 paquete-linux/
 *.tar.gz
 sucursales.json

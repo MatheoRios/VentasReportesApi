@@ -109,6 +109,7 @@ public sealed class Compartidos
 
     private readonly ConcurrentDictionary<string, Lazy<Vuelo>> enCurso = new();
     private readonly ConcurrentDictionary<string, Guardado> cache = new();
+    private readonly object cacheLock = new();
     private readonly long pesoMaximo;
     private long pesoActual;
 
@@ -116,6 +117,7 @@ public sealed class Compartidos
     public Compartidos(long pesoMaximo) { this.pesoMaximo = pesoMaximo; }
 
     public int EnCache => cache.Count;
+    internal long PesoActual => Interlocked.Read(ref pesoActual);
 
     public async Task<(T valor, OrigenResultado origen)> ObtenerAsync<T>(string clave, TimeSpan vida,
         Func<CancellationToken, Task<T>> consulta, Func<T, long> peso, long pesoMaximoUno, CancellationToken ct) where T : class
@@ -159,9 +161,13 @@ public sealed class Compartidos
             long p = Math.Max(1, peso(r));
             if (vida > TimeSpan.Zero && p <= pesoMaximoUno)
             {
-                cache[clave] = new Guardado(r, DateTime.UtcNow + vida, p, DateTime.UtcNow);
-                Interlocked.Add(ref pesoActual, p);
-                Recortar();
+                lock (cacheLock)
+                {
+                    if (cache.TryGetValue(clave, out var previo)) Interlocked.Add(ref pesoActual, -previo.Peso);
+                    cache[clave] = new Guardado(r, DateTime.UtcNow + vida, p, DateTime.UtcNow);
+                    Interlocked.Add(ref pesoActual, p);
+                    RecortarSinBloqueo();
+                }
             }
             return r;
         }
@@ -174,18 +180,28 @@ public sealed class Compartidos
 
     private void Quitar(string clave)
     {
+        lock (cacheLock) QuitarSinBloqueo(clave);
+    }
+
+    private void QuitarSinBloqueo(string clave)
+    {
         if (cache.TryRemove(clave, out var g)) Interlocked.Add(ref pesoActual, -g.Peso);
     }
 
     /// <summary>Saca lo vencido y, si hay demasiadas filas en memoria, lo más viejo.</summary>
     public void Recortar()
     {
+        lock (cacheLock) RecortarSinBloqueo();
+    }
+
+    private void RecortarSinBloqueo()
+    {
         var ahora = DateTime.UtcNow;
-        foreach (var (k, g) in cache) if (g.Vence <= ahora) Quitar(k);
+        foreach (var (k, g) in cache) if (g.Vence <= ahora) QuitarSinBloqueo(k);
         if (Interlocked.Read(ref pesoActual) <= pesoMaximo) return;
         foreach (var (k, _) in cache.OrderBy(x => x.Value.Creado))
         {
-            Quitar(k);
+            QuitarSinBloqueo(k);
             if (Interlocked.Read(ref pesoActual) <= pesoMaximo) break;
         }
     }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 namespace VentasReportesApi;
@@ -208,9 +209,9 @@ DROP TABLE #D;";
                 var t = tipos[i];
                 bool numero = t == typeof(decimal) || t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(double) || t == typeof(float);
                 if (rd.IsDBNull(i)) f[i] = numero ? 0 : "";
-                else if (t == typeof(int) || t == typeof(long) || t == typeof(short)) f[i] = Convert.ToInt64(rd.GetValue(i));
-                else if (numero) f[i] = Convert.ToDecimal(rd.GetValue(i));
-                else f[i] = Convert.ToString(rd.GetValue(i))!.Trim();
+                else if (t == typeof(int) || t == typeof(long) || t == typeof(short)) f[i] = Convert.ToInt64(rd.GetValue(i), CultureInfo.InvariantCulture);
+                else if (numero) f[i] = Convert.ToDecimal(rd.GetValue(i), CultureInfo.InvariantCulture);
+                else f[i] = (Convert.ToString(rd.GetValue(i), CultureInfo.InvariantCulture) ?? "").Trim();
             }
             destino.Add(f);
         }
