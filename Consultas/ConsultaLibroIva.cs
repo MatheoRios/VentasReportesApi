@@ -24,7 +24,7 @@ public static class ConsultaLibroIva
     //       (USD = monto en Bs ÷ tasa del propio documento: TasaUSD y si no, Tasa; en la nota, la de la nota y si no, la de la factura)
     private static readonly string[] Tablas = { "KLK_FACTURAHDR", "KLK_FACTURALINE", "KLK_NCREDITOHDR", "KLK_NCREDITOLINE", "KLK_CAJA", "KLK_CIERRE" };
 
-    private static string Sql(Dictionary<string, Dictionary<string, string>> c, List<string> avisos)
+    internal static string Sql(Dictionary<string, Dictionary<string, string>> c, List<string> avisos)
     {
         var fh = c["KLK_FACTURAHDR"]; var fl = c["KLK_FACTURALINE"]; var nh = c["KLK_NCREDITOHDR"]; var nl = c["KLK_NCREDITOLINE"];
         var cj = c["KLK_CAJA"]; var ci = c["KLK_CIERRE"];
@@ -59,11 +59,12 @@ public static class ConsultaLibroIva
             $"{N(t, a, "Total")} - {N(t, a, "MontoImpuesto")} - {N(t, a, "MontoIGTF")} - {N(t, a, "Exento")}";
         string ordenNl = nl.ContainsKey("Orden") ? ConsultaCierres.Igual("NL.Orden", ConsultaCierres.Tipo(nl, "Orden"), "D.Ap", "nvarchar") : "1 = 1";
         // reparto por alícuota según los renglones (PorcImpuesto con un margen por redondeo)
+        // Nota: usar literales con punto decimal (independiente de la cultura del servidor, p. ej. es-VE donde decimal usa coma)
         string Pesos(Dictionary<string, string> t, string a) =>
             !t.ContainsKey("PorcImpuesto") ? "0, 0, 0, 0, 0, 0" :
-            string.Join(", ", new[] { (15.5m, 16.5m), (7.5m, 8.5m), (30.5m, 31.5m) }.Select(r =>
+            string.Join(", ", new[] { ("15.5", "16.5"), ("7.5", "8.5"), ("30.5", "31.5") }.Select(r =>
                 $"SUM(CASE WHEN {a}.PorcImpuesto BETWEEN {r.Item1} AND {r.Item2} THEN {N(t, a, "TotalLinea")} ELSE 0 END)")
-            .Concat(new[] { (15.5m, 16.5m), (7.5m, 8.5m), (30.5m, 31.5m) }.Select(r =>
+            .Concat(new[] { ("15.5", "16.5"), ("7.5", "8.5"), ("30.5", "31.5") }.Select(r =>
                 $"SUM(CASE WHEN {a}.PorcImpuesto BETWEEN {r.Item1} AND {r.Item2} THEN {N(t, a, "MontoImpuesto")} ELSE 0 END)")));
 
         return $@"
