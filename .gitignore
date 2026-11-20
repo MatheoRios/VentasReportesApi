@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+datos/
+paquete-linux/
+*.tar.gz
+sucursales.json
+sucursales.json.importado
+tiendas-instancias.config
+*.user
+*.suo

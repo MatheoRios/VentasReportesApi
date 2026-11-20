@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Centro de Reportes</title>
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Reportes POS">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icono-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preload" href="fonts/figtree-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="app.css?v=7">
+  <script src="tema.js?v=1"></script>
+</head>
+<body>
+
+<!-- ============================== INGRESO ============================== -->
+<div id="vLogin" class="min-h-full grid place-items-center gutter py-10" hidden>
+  <div class="w-full max-w-sm">
+    <div class="flex items-center gap-3 mb-8">
+      <div class="grid place-items-center w-12 h-12 rounded-xl bg-p600 text-onp font-display font-bold text-xl">V</div>
+      <div class="leading-tight">
+        <div class="text-[17px] font-semibold">Centro de Reportes</div>
+        <div class="text-sm text-muted">Ventas POS de las tiendas</div>
+      </div>
+    </div>
+    <div id="lHuellaCaja" class="mb-4" hidden>
+      <button id="lHuella" type="button" class="w-full tarjeta p-4 flex items-center gap-3 text-left hover:border-p300">
+        <span class="grid place-items-center shrink-0 w-11 h-11 rounded-xl bg-soft text-softfg">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11v3a8 8 0 0 1-1.5 4.7M8.5 14a3.5 3.5 0 0 1 7 0v1.5M5 13a7 7 0 0 1 14 0v2M6.2 7.3A8.9 8.9 0 0 1 12 5.2a9 9 0 0 1 7.8 4.5M15.5 18.5l.6-1.8"/></svg>
+        </span>
+        <span class="min-w-0 flex-1"><span class="block font-semibold">Entrar con huella o Face ID</span><span id="lHuellaUsuario" class="block text-sm text-muted truncate"></span></span>
+        <svg class="w-4 h-4 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <div class="flex items-center gap-3 my-4 text-xs text-muted"><span class="flex-1 h-px bg-line"></span>o con su clave<span class="flex-1 h-px bg-line"></span></div>
+    </div>
+    <form id="fLogin" class="rounded-2xl bg-surface border border-line p-6 flex flex-col gap-4" novalidate>
+      <h1 class="text-xl font-semibold tracking-tight">Ingresar</h1>
+      <label class="text-sm font-medium flex flex-col gap-1.5">Usuario
+        <input id="lUsuario" class="campo" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      </label>
+      <label class="text-sm font-medium flex flex-col gap-1.5">Clave
+        <input id="lClave" type="password" class="campo" autocomplete="current-password" required>
+      </label>
+      <p id="lError" class="text-sm text-bad bg-badbg rounded-xl px-3 py-2" hidden></p>
+      <button id="lBoton" class="h-12 rounded-xl bg-p600 text-onp font-semibold flex items-center justify-center gap-2">Ingresar</button>
+      <p class="text-xs text-muted text-center">Mismo usuario y clave del complemento de Excel</p>
+    </form>
+    <p id="lAviso" class="text-xs text-muted text-center mt-4" hidden></p>
+  </div>
+</div>
+
+<!-- ============================== CAMBIO DE CLAVE OBLIGATORIO ============================== -->
+<div id="vClave" class="min-h-full grid place-items-center gutter py-10" hidden>
+  <form id="fClave" class="w-full max-w-sm rounded-2xl bg-surface border border-line p-6 flex flex-col gap-4" novalidate>
+    <h1 class="text-xl font-semibold tracking-tight">Cambie su clave</h1>
+    <p class="text-sm text-muted">Su clave es temporal. Elija una nueva para continuar.</p>
+    <label class="text-sm font-medium flex flex-col gap-1.5">Clave actual<input id="cActual" type="password" class="campo" autocomplete="current-password"></label>
+    <label class="text-sm font-medium flex flex-col gap-1.5">Clave nueva<input id="cNueva" type="password" class="campo" autocomplete="new-password"></label>
+    <label class="text-sm font-medium flex flex-col gap-1.5">Repita la clave nueva<input id="cNueva2" type="password" class="campo" autocomplete="new-password"></label>
+    <p id="cError" class="text-sm text-bad bg-badbg rounded-xl px-3 py-2" hidden></p>
+    <button class="h-12 rounded-xl bg-p600 text-onp font-semibold">Guardar clave</button>
+    <button type="button" data-salir class="h-10 text-sm text-muted">Salir</button>
+  </form>
+</div>
+
+<!-- ============================== APP ============================== -->
+<div id="vApp" class="h-full flex" hidden>
+
+  <aside class="hidden md:flex flex-col shrink-0 w-[76px] lg:w-64 border-r border-line bg-surface" style="padding-left: env(safe-area-inset-left, 0px)">
+    <div class="flex items-center gap-3 h-16 px-4 lg:px-5">
+      <div class="grid place-items-center w-10 h-10 rounded-xl bg-p600 text-onp font-display font-bold">V</div>
+      <div class="hidden lg:block leading-tight min-w-0">
+        <div class="font-display font-semibold text-[15px]">Centro de Reportes</div>
+        <div id="sideTiendas" class="text-xs text-muted truncate">Ventas POS</div>
+      </div>
+    </div>
+    <nav id="navSide" class="flex-1 flex flex-col gap-1 px-3 py-2"></nav>
+    <div class="p-3 hidden lg:block">
+      <button data-v="mas" class="w-full text-left flex items-center gap-3 rounded-xl bg-raised border border-line p-3">
+        <span id="sideIniciales" class="grid place-items-center shrink-0 w-9 h-9 rounded-full bg-soft text-softfg font-semibold text-sm">··</span>
+        <span class="min-w-0 text-sm leading-tight"><span id="sideNombre" class="block font-semibold truncate"></span><span id="sideRol" class="block text-muted text-xs"></span></span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="flex-1 min-w-0 flex flex-col h-full">
+    <header class="sticky z-30 bg-surface/90 backdrop-blur border-b border-line" style="top: env(safe-area-inset-top, 0px)">
+      <div class="gutter h-14 md:h-16 flex items-center gap-2.5">
+        <button id="btnVolver" class="grid place-items-center w-9 h-9 -ml-1 rounded-full hover:bg-raised" aria-label="Volver" hidden>
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+        <div id="logoMovil" class="md:hidden grid place-items-center w-9 h-9 rounded-xl bg-p600 text-onp font-display font-bold">V</div>
+        <div class="min-w-0 flex-1">
+          <h1 id="titulo" class="font-display font-semibold text-[17px] md:text-xl truncate">Ventas</h1>
+          <div id="subtitulo" class="text-xs text-muted truncate"></div>
+        </div>
+        <button id="btnRefrescar" class="grid place-items-center w-10 h-10 rounded-full border border-line bg-raised hover:border-p300" aria-label="Actualizar">
+          <svg id="icoRefrescar" class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+        </button>
+        <button id="btnFiltro" class="flex items-center gap-2 h-10 px-3 rounded-full border border-line bg-raised text-sm font-medium hover:border-p300" aria-label="Tiendas y fechas">
+          <svg class="w-4 h-4 text-p600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          <span class="hidden sm:inline">Filtros</span>
+          <span id="filtroCount" class="num text-xs rounded-full bg-soft text-softfg px-1.5">0</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="main" class="flex-1 overflow-y-auto">
+      <div class="gutter pt-4 pb-28 md:pb-10 max-w-7xl mx-auto w-full">
+
+        <!-- ============ VENTAS ============ -->
+        <section id="v-ventas" class="flex flex-col gap-4" hidden>
+          <div class="scroll-x -mx-4 px-4 sm:mx-0 sm:px-0"><div id="rangosV" class="seg w-max" role="group" aria-label="Período"></div></div>
+
+          <div class="tinta p-5 md:p-6">
+            <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+              <div class="min-w-0">
+                <div class="text-[11px] font-semibold tracking-[.08em] uppercase text-inkmuted">Venta neta · USD</div>
+                <div class="flex items-baseline gap-3 flex-wrap mt-1.5">
+                  <div class="font-display font-semibold num text-[34px] md:text-[44px] leading-none tracking-tight"><span class="text-inkmuted text-[0.55em] align-[0.35em] mr-1">$</span><span id="kTotal">—</span></div>
+                  <span id="kVar" class="chip" hidden></span>
+                </div>
+                <div class="num text-[13px] text-inkmuted mt-2" id="kBs"></div>
+              </div>
+              <div id="kComp" class="text-right text-[13px] text-inkmuted leading-relaxed num"></div>
+            </div>
+            <div class="mt-5 border-t border-inkline pt-4">
+              <div class="flex items-center justify-between gap-3 mb-2">
+                <div class="text-[13px] font-semibold">Tendencia de los últimos 14 días</div>
+                <div id="tendNota" class="text-[11px] text-inkmuted truncate"></div>
+              </div>
+              <div id="tendencia" class="relative grafico h-[150px] md:h-[180px]"></div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="tarjeta p-4"><div class="etq">Facturas</div><div id="kFac" class="font-display font-semibold num text-[22px] mt-1.5">—</div><div id="kNc" class="text-xs text-muted mt-1 num"></div></div>
+            <div class="tarjeta p-4"><div class="etq">Ticket promedio</div><div id="kTicket" class="font-display font-semibold num text-[22px] mt-1.5">—</div><div class="text-xs text-muted mt-1">USD por factura</div></div>
+            <div class="tarjeta p-4"><div class="etq">Devoluciones</div><div id="kDev" class="font-display font-semibold num text-[22px] mt-1.5">—</div><div id="kBruta" class="text-xs text-muted mt-1 num"></div></div>
+            <div class="tarjeta p-4"><div class="etq">Tiendas</div><div class="font-display font-semibold num text-[22px] mt-1.5"><span id="kTiendas">0</span><span id="kTiendasDe" class="text-muted text-base font-medium"></span></div><div id="kTiendasNota" class="text-xs text-muted mt-1"></div></div>
+          </div>
+
+          <div id="erroresV" hidden></div>
+
+          <div class="grid lg:grid-cols-[1fr_400px] gap-5 items-start">
+            <div class="min-w-0">
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <h2 class="text-[15px] font-semibold">Por tienda</h2>
+                <div class="seg" role="group" aria-label="Orden">
+                  <button data-orden="usd" class="ord">Mayor venta</button>
+                  <button data-orden="var" class="ord">Variación</button>
+                </div>
+              </div>
+              <ul id="listaTiendas" class="flex flex-col gap-2 lg:hidden"></ul>
+              <div class="hidden lg:block tarjeta overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead class="text-xs text-muted bg-raised">
+                    <tr><th class="text-left font-semibold px-4 py-3">Tienda</th><th class="text-right font-semibold px-3">Venta neta</th><th class="text-right font-semibold px-3">Facturas</th><th class="text-right font-semibold px-3">Ticket</th><th class="text-right font-semibold px-3">Unidades</th><th id="thVar" class="text-right font-semibold px-4">Variación</th></tr>
+                  </thead>
+                  <tbody id="tablaTiendas" class="num"></tbody>
+                </table>
+              </div>
+            </div>
+            <aside id="detalleLateral" class="hidden lg:block sticky top-4 tarjeta p-5"></aside>
+          </div>
+        </section>
+
+        <!-- ============ CIERRES ============ -->
+        <section id="v-cierres" class="flex flex-col gap-5" hidden>
+          <div class="scroll-x -mx-4 px-4 sm:mx-0 sm:px-0"><div id="rangosC" class="seg w-max" role="group" aria-label="Período"></div></div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="tarjeta p-4"><div class="flex items-center gap-1.5 text-xs font-semibold text-ok"><span class="w-2 h-2 rounded-full bg-okf"></span>Cuadran</div><div id="cOk" class="font-display font-semibold num text-[22px] mt-1.5">—</div></div>
+            <div class="tarjeta p-4"><div class="flex items-center gap-1.5 text-xs font-semibold text-bad"><span class="w-2 h-2 rounded-full bg-badf"></span>Descuadre</div><div id="cBad" class="font-display font-semibold num text-[22px] mt-1.5">—</div></div>
+            <div class="tarjeta p-4"><div class="flex items-center gap-1.5 text-xs font-semibold text-warn"><span class="w-2 h-2 rounded-full bg-serf"></span>Sin cierre X</div><div id="cSin" class="font-display font-semibold num text-[22px] mt-1.5">—</div></div>
+          </div>
+          <div class="tarjeta p-4">
+            <div class="flex items-center justify-between gap-3 mb-2"><div class="text-[13px] font-semibold">Estado de las cajas</div><div id="cBarraNota" class="text-[11px] text-muted"></div></div>
+            <div id="cBarra" class="flex h-2.5 rounded-full overflow-hidden bg-raised gap-[2px]"></div>
+          </div>
+          <div class="tarjeta p-4 flex items-center gap-4">
+            <div class="min-w-0 flex-1">
+              <div class="text-xs text-muted font-medium">Diferencia neta (declarado − facturado)</div>
+              <div id="cNeta" class="font-display font-semibold num text-2xl mt-1">—</div>
+              <div class="text-[11px] text-muted mt-0.5">Cada cierre a su tasa · cuadra si la diferencia es de hasta 1 USD</div>
+            </div>
+            <div class="text-right text-xs text-muted leading-relaxed num shrink-0" id="cDet"></div>
+          </div>
+          <div id="erroresC" hidden></div>
+          <div class="grid lg:grid-cols-[1fr_380px] gap-5 items-start">
+            <div class="min-w-0">
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <h2 class="text-[15px] font-semibold shrink-0">Cajas</h2>
+                <div class="scroll-x"><div id="fCierre" class="seg w-max" role="group" aria-label="Filtro de cajas"></div></div>
+              </div>
+              <ul id="listaCajas" class="grid sm:grid-cols-2 gap-2"></ul>
+            </div>
+            <div class="tarjeta p-5">
+              <h2 class="text-[15px] font-semibold">Ranking de cajeros</h2>
+              <p class="text-xs text-muted mt-0.5 mb-3">Mayor faltante acumulado en el período</p>
+              <ol id="ranking" class="flex flex-col gap-3"></ol>
+            </div>
+          </div>
+          <div id="redCard" class="tarjeta p-5" hidden>
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h2 class="text-[15px] font-semibold">Red de cierres</h2>
+                <p class="text-xs text-muted mt-0.5">¿El faltante es de la persona o de la caja? Cada línea une un cajero con una caja donde cerró.</p>
+              </div>
+              <div class="scroll-x max-w-full"><div id="redTiendas" class="seg w-max empty:hidden" role="group" aria-label="Tienda"></div></div>
+            </div>
+            <div id="redNota" class="text-[11px] text-warn mt-2 empty:hidden"></div>
+            <div class="grid lg:grid-cols-[1fr_400px] gap-5 mt-4 items-start">
+              <div class="min-w-0"><div id="redGrafo" class="pt-3"></div><div id="redSel" class="text-xs mt-3"></div></div>
+              <div id="redVeredictos" class="flex flex-col gap-4"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ CALCULADORA ============ -->
+        <section id="v-calc" class="max-w-md mx-auto w-full flex flex-col gap-4" hidden>
+          <div class="rounded-xl bg-tint border border-line p-4 flex items-center gap-3">
+            <div class="grid place-items-center shrink-0 w-10 h-10 rounded-xl bg-p600 text-onp text-sm font-bold">Bs</div>
+            <div class="flex-1 min-w-0">
+              <div id="tasaNota" class="text-xs text-muted truncate">Tasa del día (último cierre X)</div>
+              <div class="font-display font-semibold num text-lg"><span id="tasaTxt">—</span> <span class="text-sm text-muted font-sans font-medium">Bs por USD</span></div>
+            </div>
+            <button id="usarTasa" class="h-9 px-3 rounded-full bg-surface border border-line text-xs font-semibold hover:border-p300">Usar</button>
+          </div>
+          <div class="rounded-2xl bg-surface border border-line p-4">
+            <div class="flex gap-1.5 mb-3" id="monedas"></div>
+            <div class="text-right">
+              <div id="calcExpr" class="num text-sm text-muted h-5 truncate"></div>
+              <div id="calcVal" class="font-display font-semibold num text-[44px] leading-tight truncate">0</div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mt-3 text-sm" id="conv"></div>
+          </div>
+          <div class="grid grid-cols-4 gap-2" id="teclado"></div>
+          <label class="tarjeta p-3 flex items-center gap-3 text-sm">
+            <span class="flex-1">Tasa del euro <span class="text-muted">(Bs por 1 EUR, se guarda en este teléfono)</span></span>
+            <input id="tasaEur" inputmode="decimal" class="campo !h-10 !w-28 text-right num" placeholder="0,00">
+          </label>
+        </section>
+
+        <!-- ============ CHAT ============ -->
+        <section id="v-chat" class="w-full" hidden>
+          <!-- alto fijo: la lista y los mensajes tienen su propio scroll (la página no se mueve) -->
+          <div class="alto-chat grid lg:grid-cols-[340px_1fr] gap-4">
+            <div id="panelCanales" class="flex flex-col min-h-0 gap-2.5">
+              <div class="flex gap-2 shrink-0">
+                <div class="relative flex-1 min-w-0">
+                  <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                  <label for="buscarChat" class="sr-only">Buscar</label>
+                  <input id="buscarChat" type="search" class="campo !h-10 !pl-9 !text-[15px]" placeholder="Buscar tienda o persona…" autocomplete="off">
+                </div>
+                <button id="nuevoChat" class="shrink-0 h-10 px-3 rounded-xl bg-p600 text-onp text-sm font-semibold inline-flex items-center gap-1.5" title="Escribir a una persona">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="hidden sm:inline">Nuevo</span>
+                </button>
+              </div>
+              <ul id="listaCanales" class="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-1.5 pr-0.5"></ul>
+            </div>
+            <div id="conversacion" class="tarjeta min-w-0 min-h-0 flex flex-col overflow-hidden" hidden>
+              <div id="mensajes" class="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-3 p-3 md:p-4"></div>
+              <div id="nuevosAbajo" class="shrink-0 -mt-11 mb-1 self-center z-10" hidden>
+                <button class="chip chip-neutro !h-8 !px-3 shadow-md bg-surface" id="btnNuevosAbajo">↓ Mensajes nuevos</button>
+              </div>
+              <form id="chatForm" class="shrink-0 flex gap-2 border-t border-line p-2.5 bg-surface">
+                <label for="chatTxt" class="sr-only">Mensaje</label>
+                <input id="chatTxt" class="flex-1 min-w-0 h-11 rounded-xl bg-raised border border-line px-3.5 text-[16px] outline-none focus:border-p500 placeholder:text-muted" placeholder="Escriba un mensaje…" autocomplete="off" maxlength="4000">
+                <button id="chatEnviar" class="grid place-items-center shrink-0 w-11 h-11 rounded-xl bg-p600 text-onp" aria-label="Enviar">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </button>
+              </form>
+            </div>
+            <div id="sinConversacion" class="hidden lg:grid place-items-center rounded-xl border border-dashed border-line text-sm text-muted">Elija una conversación o busque una persona</div>
+          </div>
+        </section>
+
+        <!-- ============ MÁS ============ -->
+        <section id="v-mas" class="max-w-2xl mx-auto w-full flex flex-col gap-6" hidden>
+          <div class="tarjeta p-4 flex items-center gap-3">
+            <div id="masIniciales" class="grid place-items-center shrink-0 w-12 h-12 rounded-full bg-soft text-softfg font-semibold">··</div>
+            <div class="min-w-0 flex-1"><div id="masNombre" class="font-semibold truncate"></div><div id="masRol" class="text-xs text-muted"></div></div>
+            <button data-salir class="h-10 px-4 rounded-full border border-line text-sm font-semibold text-bad hover:bg-badbg">Salir</button>
+          </div>
+          <button id="irAdmin" data-v="admin" class="tarjeta p-4 flex items-center gap-3 text-left hover:border-p300" hidden>
+            <span class="grid place-items-center shrink-0 w-10 h-10 rounded-xl bg-soft text-softfg">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+            </span>
+            <span class="min-w-0 flex-1"><span class="block font-semibold text-sm">Administración</span><span id="irAdminNota" class="block text-xs text-muted">Usuarios y tiendas en línea</span></span>
+            <svg class="w-4 h-4 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+          <div class="tarjeta p-4" id="huellaCard">
+            <div class="flex items-start gap-3">
+              <span class="grid place-items-center shrink-0 w-10 h-10 rounded-xl bg-soft text-softfg">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11v3a8 8 0 0 1-1.5 4.7M8.5 14a3.5 3.5 0 0 1 7 0v1.5M5 13a7 7 0 0 1 14 0v2M6.2 7.3A8.9 8.9 0 0 1 12 5.2a9 9 0 0 1 7.8 4.5"/></svg>
+              </span>
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-sm">Ingreso con huella o Face ID</div>
+                <div id="huellaTexto" class="text-xs text-muted mt-0.5">Entre sin escribir la clave en este teléfono.</div>
+              </div>
+              <button id="huellaBoton" class="shrink-0 h-9 px-3 rounded-lg bg-p600 text-onp text-sm font-semibold" hidden>Activar</button>
+            </div>
+            <ul id="huellaEquipos" class="mt-3 divide-y divide-line text-sm" hidden></ul>
+          </div>
+          <div>
+            <h2 class="text-[15px] font-semibold mb-1">Otros reportes</h2>
+            <p class="text-xs text-muted mb-3">Estos se generan en Excel con el complemento</p>
+            <ul id="masReportes" class="tarjeta divide-y divide-line overflow-hidden"></ul>
+          </div>
+          <div>
+            <h2 class="text-[15px] font-semibold mb-1">Tema</h2>
+            <p class="text-xs text-muted mb-3">Los mismos colores del complemento de Excel</p>
+            <div id="temas" class="grid grid-cols-3 sm:grid-cols-6 gap-2"></div>
+          </div>
+          <div class="tarjeta p-4 flex items-center justify-between gap-3">
+            <div><div class="font-semibold text-sm">Modo oscuro</div><div class="text-xs text-muted">Automático según el teléfono, o elija</div></div>
+            <div class="flex rounded-full bg-raised border border-line p-0.5 text-xs font-medium shrink-0" id="modos"></div>
+          </div>
+          <details class="tarjeta p-4 group">
+            <summary class="font-semibold text-sm cursor-pointer list-none flex justify-between items-center">Cambiar mi clave<span class="text-muted group-open:rotate-90 transition">›</span></summary>
+            <form id="fClave2" class="flex flex-col gap-3 mt-4" novalidate>
+              <input id="c2Actual" type="password" class="campo" placeholder="Clave actual" autocomplete="current-password">
+              <input id="c2Nueva" type="password" class="campo" placeholder="Clave nueva" autocomplete="new-password">
+              <input id="c2Nueva2" type="password" class="campo" placeholder="Repita la clave nueva" autocomplete="new-password">
+              <p id="c2Msg" class="text-sm rounded-xl px-3 py-2" hidden></p>
+              <button class="h-11 rounded-xl bg-p600 text-onp font-semibold">Guardar clave</button>
+            </form>
+          </details>
+          <p id="masVersion" class="text-xs text-muted text-center"></p>
+        </section>
+
+        <!-- ============ ADMINISTRACIÓN (Administrador y Jefe) ============ -->
+        <section id="v-admin" class="max-w-3xl mx-auto w-full flex flex-col gap-4" hidden>
+          <div id="adminTabs" class="seg w-max" role="group" aria-label="Sección">
+            <button data-at="usuarios" aria-pressed="true">Usuarios</button>
+            <button data-at="tiendas" aria-pressed="false">Tiendas en línea</button>
+          </div>
+
+          <div id="adminUsuarios" class="flex flex-col gap-3">
+            <div class="grid grid-cols-3 gap-3">
+              <div class="tarjeta p-3.5"><div class="etq">Activos</div><div id="uActivos" class="font-display font-semibold num text-[22px] mt-1">—</div></div>
+              <div class="tarjeta p-3.5"><div class="etq">Inactivos</div><div id="uInactivos" class="font-display font-semibold num text-[22px] mt-1">—</div></div>
+              <div class="tarjeta p-3.5"><div class="etq text-bad">Bloqueados</div><div id="uBloqueados" class="font-display font-semibold num text-[22px] mt-1">—</div></div>
+            </div>
+            <div class="relative">
+              <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+              <label for="buscarUsuario" class="sr-only">Buscar usuario</label>
+              <input id="buscarUsuario" type="search" class="campo !h-10 !pl-9 !text-[15px]" placeholder="Buscar por nombre, usuario o tienda…" autocomplete="off">
+            </div>
+            <div class="scroll-x -mx-4 px-4 sm:mx-0 sm:px-0"><div id="filtroUsuarios" class="seg w-max" role="group" aria-label="Filtro"></div></div>
+            <ul id="listaUsuarios" class="flex flex-col gap-2"></ul>
+          </div>
+
+          <div id="adminTiendas" class="flex flex-col gap-3" hidden>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="tarjeta p-4"><div class="flex items-center gap-1.5 text-xs font-semibold text-ok"><span class="w-2 h-2 rounded-full bg-okf"></span>En línea</div><div id="tOk" class="font-display font-semibold num text-[22px] mt-1.5">—</div></div>
+              <div class="tarjeta p-4"><div class="flex items-center gap-1.5 text-xs font-semibold text-bad"><span class="w-2 h-2 rounded-full bg-badf"></span>Sin respuesta</div><div id="tMal" class="font-display font-semibold num text-[22px] mt-1.5">—</div></div>
+            </div>
+            <ul id="listaEstadoTiendas" class="grid sm:grid-cols-2 gap-2"></ul>
+            <p id="tNota" class="text-xs text-muted"></p>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <nav id="navBottom" class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/95 backdrop-blur border-t border-line navbar pt-1.5 grid"></nav>
+
+  <div id="velo" class="fixed inset-0 z-50 bg-black/40 fade opacity-0 pointer-events-none"></div>
+  <div id="sheet" class="sheet invisible fixed z-50 inset-x-0 bottom-0 translate-y-full md:inset-x-auto md:right-6 md:bottom-6 md:w-[420px] md:rounded-2xl md:translate-y-[120%] rounded-t-3xl bg-surface border border-line max-h-[88%] overflow-y-auto shadow-2xl sheet-pad" role="dialog" aria-modal="true">
+    <div class="sticky top-0 bg-surface pt-2.5 pb-1 grid place-items-center"><div class="w-10 h-1.5 rounded-full bg-line"></div></div>
+    <div id="sheetBody" class="px-5 pb-2"></div>
+  </div>
+</div>
+
+<div id="toast" class="fixed z-[70] left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top,0px)+68px)] max-w-[90%] rounded-full bg-fg text-bg text-sm font-medium px-4 py-2.5 shadow-lg fade opacity-0 pointer-events-none"></div>
+
+<script src="app.js?v=11"></script>
+</body>
+</html>

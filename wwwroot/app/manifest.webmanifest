@@ -1,0 +1,17 @@
+{
+  "name": "Reportes POS",
+  "short_name": "Reportes POS",
+  "description": "Ventas, cierres de caja, calculadora y chat de las tiendas",
+  "lang": "es",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F6F8F7",
+  "theme_color": "#16A34A",
+  "icons": [
+    { "src": "icono-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icono-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icono-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

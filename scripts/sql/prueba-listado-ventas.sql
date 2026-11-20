@@ -1,0 +1,77 @@
+-- Prueba del Listado de ventas (la misma consulta que usa la API). Ejecutar en SSMS sobre la base de UNA tienda.
+-- Cambie las fechas. Devuelve 3 resultados: documentos, artículos y pagos. Solo lee datos.
+DECLARE @p1 DATE = '2026-10-19', @p2 DATE = '2026-10-19';
+SET NOCOUNT ON;
+DECLARE @desde DATETIME = @p1, @hasta DATETIME = DATEADD(DAY, 1, @p2);
+CREATE TABLE #D (
+    Id INT IDENTITY(0, 1) PRIMARY KEY, Tipo NCHAR(3) NOT NULL, Num NVARCHAR(50) COLLATE DATABASE_DEFAULT NOT NULL, Caja NVARCHAR(50) COLLATE DATABASE_DEFAULT NOT NULL, Ap NVARCHAR(50) COLLATE DATABASE_DEFAULT NOT NULL,
+    Ticket NVARCHAR(50) COLLATE DATABASE_DEFAULT, Fecha NVARCHAR(19) COLLATE DATABASE_DEFAULT, NomCaja NVARCHAR(100) COLLATE DATABASE_DEFAULT, CodCajero NVARCHAR(100) COLLATE DATABASE_DEFAULT, Cajero NVARCHAR(100) COLLATE DATABASE_DEFAULT, Rif NVARCHAR(100) COLLATE DATABASE_DEFAULT, Cliente NVARCHAR(100) COLLATE DATABASE_DEFAULT,
+    SubTotal DECIMAL(19,4), Descuento DECIMAL(19,4), Impuesto DECIMAL(19,4), Exento DECIMAL(19,4), IGTF DECIMAL(19,4), Total DECIMAL(19,4), Tasa DECIMAL(19,4),
+    Anulado INT, Cobro NVARCHAR(50) COLLATE DATABASE_DEFAULT, NoFiscal INT, Credito INT);
+
+INSERT INTO #D (Tipo, Num, Caja, Ap, Ticket, Fecha, NomCaja, CodCajero, Cajero, Rif, Cliente, SubTotal, Descuento, Impuesto, Exento, IGTF, Total, Tasa, Anulado, Cobro, NoFiscal, Credito)
+SELECT N'VEN', FH.NumFactura, FH.CodCaja, FH.CodApertura, LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), FH.[NumTicketFiscal]), N''))), CASE WHEN FH.Hora IS NOT NULL AND CAST(FH.[FechaFactura] AS TIME) = '00:00:00' THEN CONVERT(CHAR(10), FH.[FechaFactura], 120) + ' ' + CONVERT(CHAR(8), FH.Hora, 108) ELSE CONVERT(CHAR(19), FH.[FechaFactura], 120) END,
+       LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), FH.[NomCaja]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), FH.[CodigoVendedorPOS]), N''))), COALESCE(NULLIF(LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), FH.[NombreVendedorPOS]), N''))), N''), (SELECT TOP 1 LTRIM(RTRIM(U.Nombre)) FROM KLK_USUARIOS U WHERE U.Id_Usuario = TRY_CONVERT(BIGINT, FH.CodigoVendedorPOS)), N''), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), FH.[Rif]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), FH.[NomCliente]), N''))),
+       CAST(ISNULL(FH.[SubTotal], 0) AS DECIMAL(19,4)), CAST(ISNULL(FH.[MontoDescuento], 0) AS DECIMAL(19,4)), CAST(ISNULL(FH.[MontoImpuesto], 0) AS DECIMAL(19,4)), CAST(ISNULL(FH.[Exento], 0) AS DECIMAL(19,4)),
+       CAST(ISNULL(FH.[MontoIGTF], 0) AS DECIMAL(19,4)), CAST(ISNULL(FH.[Total], 0) AS DECIMAL(19,4)), CAST(COALESCE(NULLIF(FH.TasaUSD, 0), NULLIF(FH.Tasa, 0), 0) AS DECIMAL(19,4)), CASE WHEN CONVERT(NVARCHAR(10), FH.[Anulado]) IN (N'1', N'S', N'True') THEN 1 ELSE 0 END, LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), FH.[NCobro]), N''))),
+       CASE WHEN CONVERT(NVARCHAR(10), FH.[NoFiscal]) IN (N'1', N'S', N'True') THEN 1 ELSE 0 END, CASE WHEN CONVERT(NVARCHAR(10), FH.[FacturaACredito]) IN (N'1', N'S', N'True') THEN 1 ELSE 0 END
+FROM KLK_FACTURAHDR FH
+WHERE FH.FechaFactura >= @desde AND FH.FechaFactura < @hasta AND FH.EnEspera = 0
+ORDER BY FH.FechaFactura, FH.Hora, FH.CodCaja, FH.NumFactura;
+
+INSERT INTO #D (Tipo, Num, Caja, Ap, Ticket, Fecha, NomCaja, CodCajero, Cajero, Rif, Cliente, SubTotal, Descuento, Impuesto, Exento, IGTF, Total, Tasa, Anulado, Cobro, NoFiscal, Credito)
+SELECT N'DEV', NH.NumNota, NH.CodCaja, NH.CodApertura, LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), NH.[NumTicketFiscal]), N''))), CASE WHEN NH.Hora IS NOT NULL AND CAST(NH.[FechaNota] AS TIME) = '00:00:00' THEN CONVERT(CHAR(10), NH.[FechaNota], 120) + ' ' + CONVERT(CHAR(8), NH.Hora, 108) ELSE CONVERT(CHAR(19), NH.[FechaNota], 120) END,
+       LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), NH.[NomCaja]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), NH.[CodigoVendedorPOS]), N''))), COALESCE(NULLIF(LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), NH.[NombreVendedorPOS]), N''))), N''), (SELECT TOP 1 LTRIM(RTRIM(U.Nombre)) FROM KLK_USUARIOS U WHERE U.Id_Usuario = TRY_CONVERT(BIGINT, NH.CodigoVendedorPOS)), N''), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), NH.[Rif]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), NH.[NomCliente]), N''))),
+       CAST(ISNULL(NH.[SubTotal], 0) AS DECIMAL(19,4)), CAST(ISNULL(NH.[MontoDescuento], 0) AS DECIMAL(19,4)), CAST(ISNULL(NH.[MontoImpuesto], 0) AS DECIMAL(19,4)), CAST(ISNULL(NH.[Exento], 0) AS DECIMAL(19,4)),
+       CAST(ISNULL(NH.[MontoIGTF], 0) AS DECIMAL(19,4)), CAST(ISNULL(NH.[Total], 0) AS DECIMAL(19,4)), CAST(ISNULL(NH.TasaUSD, 0) AS DECIMAL(19,4)), 0, LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), NH.[FacturaAfectada]), N''))),
+       CASE WHEN CONVERT(NVARCHAR(10), NH.[NoFiscal]) IN (N'1', N'S', N'True') THEN 1 ELSE 0 END, 0
+FROM KLK_NCREDITOHDR NH
+WHERE NH.FechaNota >= @desde AND NH.FechaNota < @hasta
+ORDER BY NH.FechaNota, NH.Hora, NH.CodCaja, NH.NumNota;
+
+CREATE INDEX IX_D ON #D (Tipo, Num, Caja, Ap);
+
+SELECT Tipo, Num, Ticket, Fecha, Caja, NomCaja, CodCajero, Cajero, Rif, Cliente, SubTotal, Descuento, Impuesto, Exento, IGTF, Total, Tasa, Anulado,
+       Cobro, NoFiscal, Credito
+FROM #D ORDER BY Id;
+
+SELECT D.Id, FL.NumLineas, LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), FL.[CodArticulo]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), FL.[CodBarra]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), FL.[Descripcion]), N''))),
+       CAST(ISNULL(FL.[Cantidad], 0) AS DECIMAL(19,4)), CAST(ISNULL(FL.[Precio], 0) AS DECIMAL(19,4)), CAST(ISNULL(FL.[MontoDescuento], 0) + ISNULL(FL.[MontoDescuentoFidel], 0) + ISNULL(FL.[MontoDescuentoFormPago], 0) AS DECIMAL(19,4)), CAST(ISNULL(FL.[TotalLinea], 0) AS DECIMAL(19,4)),
+       CAST(ISNULL(FL.[MontoImpuesto], 0) AS DECIMAL(19,4)), CAST(ISNULL(FL.[PorcImpuesto], 0) AS DECIMAL(19,4)), CAST(ISNULL(FL.[TotalLineaUSD], 0) + ISNULL(FL.[IvaUSD], 0) - (ISNULL(FL.[DescuentoUSD], 0) + ISNULL(FL.[MontoDescuentoFidelUsd], 0) + ISNULL(FL.[MontoDescuentoFormPagoUsd], 0)) AS DECIMAL(19,4))
+FROM #D D
+JOIN KLK_FACTURALINE FL ON FL.NumFactura = D.Num AND FL.CodCaja = D.Caja AND FL.CodApertura = D.Ap
+WHERE D.Tipo = N'VEN'
+UNION ALL
+SELECT D.Id, NL.NumLineas, LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), NL.[CodArticulo]), N''))), N'', LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), NL.[Descripcion]), N''))),
+       CAST(ISNULL(NL.[Cantidad], 0) AS DECIMAL(19,4)), CAST(ISNULL(NL.[Precio], 0) AS DECIMAL(19,4)), CAST(ISNULL(NL.[MontoDescuento], 0) + 0 + 0 AS DECIMAL(19,4)), CAST(ISNULL(NL.[TotalLinea], 0) AS DECIMAL(19,4)),
+       CAST(ISNULL(NL.[MontoImpuesto], 0) AS DECIMAL(19,4)), CAST(ISNULL(NL.[PorcImpuesto], 0) AS DECIMAL(19,4)), CAST(ISNULL(NL.[TotalLineaUSD], 0) + ISNULL(NL.[IvaUSD], 0) - (ISNULL(NL.[DescuentoUSD], 0) + ISNULL(NL.[MontoDescuentoFidelUsd], 0) + ISNULL(NL.[MontoDescuentoFormPagoUsd], 0)) AS DECIMAL(19,4))
+FROM #D D
+JOIN KLK_NCREDITOLINE NL ON NL.NumNota = D.Num AND NL.CodCaja = D.Caja AND NL.Orden = D.Ap
+WHERE D.Tipo = N'DEV'
+ORDER BY 1, 2;
+
+CREATE TABLE #P (Id INT, NroCobro NVARCHAR(50) COLLATE DATABASE_DEFAULT, Linea INT, Fecha NVARCHAR(19), Forma NVARCHAR(100) COLLATE DATABASE_DEFAULT,
+                 CodF NVARCHAR(15) COLLATE DATABASE_DEFAULT, TipoC NVARCHAR(50) COLLATE DATABASE_DEFAULT, Monto DECIMAL(19,4), MontoUsd DECIMAL(19,4),
+                 Tasa DECIMAL(19,4), Vuelto DECIMAL(19,4), Ref NVARCHAR(50) COLLATE DATABASE_DEFAULT, Banco NVARCHAR(100) COLLATE DATABASE_DEFAULT,
+                 RefUsd NVARCHAR(50) COLLATE DATABASE_DEFAULT, BancoUsd NVARCHAR(50) COLLATE DATABASE_DEFAULT);
+INSERT INTO #P
+SELECT D.Id, LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), CL.[NroCobro]), N''))), CAST(ISNULL(CL.[NroLinea], 0) AS INT), CONVERT(CHAR(19), CL.Fecha, 120),
+       LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), CL.[FormadePago]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(15), CL.[CodFPago]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), CL.[TipoCobro]), N''))),
+       CAST(ISNULL(CL.[Monto], 0) AS DECIMAL(19,4)), CAST(ISNULL(CL.[MontoUsd], 0) AS DECIMAL(19,4)), CAST(ISNULL(CL.[Tasa], 0) AS DECIMAL(19,4)), CAST(ISNULL(CL.[MontoCambio], 0) AS DECIMAL(19,4)),
+       LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), CL.[NTransaccion]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), CL.[NombreBanco]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), CL.[NTransaccionUSD]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), CL.[BancoTransferenciaUSD]), N'')))
+FROM #D D
+JOIN KLK_COBROLINE CL ON CL.NroCobro = D.Cobro AND CL.CodCaja = D.Caja AND CL.CodApertura = D.Ap
+WHERE D.Tipo = N'VEN' AND D.Cobro <> N'' AND (ISNULL(CL.NFactura, N'') = N'' OR CL.NFactura = D.Num) AND ISNULL(CONVERT(NVARCHAR(10), CL.Anulado), N'') NOT IN (N'S', N'1', N'T', N'True');
+-- facturas sin NCobro: se buscan por número de factura (solo si hay alguna, para no recorrer la tabla de cobros)
+IF EXISTS (SELECT 1 FROM #D WHERE Tipo = N'VEN' AND Cobro = N'')
+    INSERT INTO #P
+    SELECT D.Id, LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), CL.[NroCobro]), N''))), CAST(ISNULL(CL.[NroLinea], 0) AS INT), CONVERT(CHAR(19), CL.Fecha, 120),
+       LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), CL.[FormadePago]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(15), CL.[CodFPago]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), CL.[TipoCobro]), N''))),
+       CAST(ISNULL(CL.[Monto], 0) AS DECIMAL(19,4)), CAST(ISNULL(CL.[MontoUsd], 0) AS DECIMAL(19,4)), CAST(ISNULL(CL.[Tasa], 0) AS DECIMAL(19,4)), CAST(ISNULL(CL.[MontoCambio], 0) AS DECIMAL(19,4)),
+       LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), CL.[NTransaccion]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(100), CL.[NombreBanco]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), CL.[NTransaccionUSD]), N''))), LTRIM(RTRIM(ISNULL(CONVERT(NVARCHAR(50), CL.[BancoTransferenciaUSD]), N'')))
+    FROM #D D
+    JOIN KLK_COBROLINE CL ON CL.NFactura = D.Num AND CL.CodCaja = D.Caja AND CL.CodApertura = D.Ap
+    WHERE D.Tipo = N'VEN' AND D.Cobro = N'' AND ISNULL(CONVERT(NVARCHAR(10), CL.Anulado), N'') NOT IN (N'S', N'1', N'T', N'True') AND CL.Fecha >= DATEADD(DAY, -1, @desde) AND CL.Fecha < DATEADD(DAY, 1, @hasta);
+SELECT * FROM #P ORDER BY Id, NroCobro, Linea;
+DROP TABLE #P;
+DROP TABLE #D;

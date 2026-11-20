@@ -1,0 +1,13 @@
+# Solo para la API de reportes: acepta TLS 1.0/1.1 al conectar con SQL Server antiguos de las tiendas.
+# Lo usa el servicio a través de la variable OPENSSL_CONF; no afecta al resto del sistema.
+openssl_conf = default_conf
+
+[default_conf]
+ssl_conf = ssl_sect
+
+[ssl_sect]
+system_default = system_default_sect
+
+[system_default_sect]
+MinProtocol = TLSv1
+CipherString = DEFAULT@SECLEVEL=0
