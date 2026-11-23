@@ -34,6 +34,8 @@ copy /Y "scripts\linux\instalar-api.sh" "%PAQ%\" >nul
 copy /Y "scripts\linux\desinstalar-api.sh" "%PAQ%\" >nul
 copy /Y "scripts\linux\activar-https-tailscale.sh" "%PAQ%\" >nul
 copy /Y "scripts\linux\configurar-compras.sh" "%PAQ%\" >nul
+copy /Y "scripts\linux\configurar-respaldo-drive.sh" "%PAQ%\" >nul
+copy /Y "scripts\linux\restaurar-respaldo.sh" "%PAQ%\" >nul
 copy /Y "scripts\linux\openssl-legacy.cnf" "%PAQ%\" >nul
 copy /Y "scripts\linux\LEEME-LINUX.md" "%PAQ%\" >nul
 

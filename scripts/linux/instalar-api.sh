@@ -100,8 +100,12 @@ else
   amarillo "Firewall (ufw) no está activo: no hizo falta abrir el puerto."
 fi
 
-# 7. Respaldo diario 02:30 (30 días)
-cat > /usr/local/bin/respaldar-ventasapi <<EOS
+# 7. Respaldo diario 02:30 (30 días) — respeta la configuración cifrada a Drive si ya existe
+if [ -f "/etc/$APP/respaldo-drive.env" ] && [ -x /usr/local/bin/respaldar-ventasapi ]; then
+  echo "Respaldo cifrado a Google Drive ya configurado: se conserva /usr/local/bin/respaldar-ventasapi."
+  /usr/local/bin/respaldar-ventasapi && verde "Respaldo inicial (local + Drive) completado" || amarillo "Respaldo local hecho; revise la subida a Drive en /var/log/ventasreportesapi-respaldo.log"
+else
+  cat > /usr/local/bin/respaldar-ventasapi <<EOS
 #!/usr/bin/env bash
 set -e
 DEST=/var/backups/$APP/\$(date +%F)
@@ -111,10 +115,11 @@ cp -f "$DIR/datos/tiendas.key" "$DIR/datos/token.key" "\$DEST/" 2>/dev/null || t
 chmod -R 600 "\$DEST"/*; chmod 700 "\$DEST"
 find /var/backups/$APP -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} +
 EOS
-chmod 750 /usr/local/bin/respaldar-ventasapi
-echo "30 2 * * * root /usr/local/bin/respaldar-ventasapi" > /etc/cron.d/$APP
-chmod 644 /etc/cron.d/$APP
-/usr/local/bin/respaldar-ventasapi && verde "Respaldo inicial hecho en /var/backups/$APP"
+  chmod 750 /usr/local/bin/respaldar-ventasapi
+  echo "30 2 * * * root /usr/local/bin/respaldar-ventasapi" > /etc/cron.d/$APP
+  chmod 644 /etc/cron.d/$APP
+  /usr/local/bin/respaldar-ventasapi && verde "Respaldo inicial hecho en /var/backups/$APP"
+fi
 
 # 8. Prueba
 sleep 4
