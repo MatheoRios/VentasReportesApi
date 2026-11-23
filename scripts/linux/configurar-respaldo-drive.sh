@@ -103,6 +103,7 @@ if ! rclone listremotes --config "$RCLONE_CONF" 2>/dev/null | grep -qx "${REMOTE
   else
     amarillo "En el asistente: nombre=$REMOTE_NAME | storage=drive | scope=drive | root_folder_id=$DRIVE_FOLDER_ID"
     rclone config --config "$RCLONE_CONF"
+    rclone config update "$REMOTE_NAME" root_folder_id "$DRIVE_FOLDER_ID" --non-interactive --config "$RCLONE_CONF" >/dev/null || true
   fi
   chown root:root "$RCLONE_CONF"
   chmod 600 "$RCLONE_CONF"
@@ -257,6 +258,6 @@ echo "Ejecutando respaldo de prueba inmediato hacia Google Drive..."
 /usr/local/bin/respaldar-ventasapi
 echo
 verde "Archivos recientes en Google Drive (${REMOTE_NAME}:diarios):"
-rclone lsl "${REMOTE_NAME}:diarios" --config "$RCLONE_CONFIG" | tail -n 6
+rclone lsl "${REMOTE_NAME}:diarios" --config "$RCLONE_CONF" | tail -n 6
 echo
 verde "Listo. Cron diario programado a las 02:30 (registro en /var/log/ventasreportesapi-respaldo.log)."
