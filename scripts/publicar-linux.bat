@@ -39,12 +39,13 @@ copy /Y "scripts\linux\LEEME-LINUX.md" "%PAQ%\" >nul
 
 if exist "ventasreportesapi-linux.tar.gz" del /q "ventasreportesapi-linux.tar.gz"
 tar -czf "ventasreportesapi-linux.tar.gz" -C "%PAQ%" . || goto error
+if exist "%PAQ%" rmdir /s /q "%PAQ%"
 
 echo.
 echo  Listo: %CD%\ventasreportesapi-linux.tar.gz
 echo.
 echo  Siguiente paso (ver scripts\linux\LEEME-LINUX.md):
-echo    scp ventasreportesapi-linux.tar.gz USUARIO@192.168.21.41:~
+echo    scp ventasreportesapi-linux.tar.gz administrador@192.168.20.25:~
 echo    y en el servidor:  sudo bash instalar-api.sh
 echo.
 if not defined AUTO pause

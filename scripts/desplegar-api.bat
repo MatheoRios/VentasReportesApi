@@ -2,7 +2,7 @@
 setlocal
 title Desplegar API de Reportes en el servidor
 cd /d "%~dp0.."
-set "SERVIDOR=arios@192.168.21.41"
+set "SERVIDOR=administrador@192.168.20.25"
 
 echo.
 echo  ============================================================
@@ -15,11 +15,11 @@ call "%~dp0publicar-linux.bat" auto || goto error
 for %%F in (ventasreportesapi-linux.tar.gz) do echo        Paquete: %%~tF  (%%~zF bytes)
 
 echo.
-echo  [2/3] Copiando al servidor (pide la clave de arios)...
+echo  [2/3] Copiando al servidor (pide la clave de administrador)...
 scp ventasreportesapi-linux.tar.gz %SERVIDOR%:~ || goto error
 
 echo.
-echo  [3/3] Instalando en el servidor (pide la clave de arios y la de sudo)...
+echo  [3/3] Instalando en el servidor (pide la clave de administrador y la de sudo)...
 ssh -t %SERVIDOR% "rm -rf ~/api-paquete && mkdir ~/api-paquete && tar -xzf ~/ventasreportesapi-linux.tar.gz -C ~/api-paquete && cd ~/api-paquete && sudo bash instalar-api.sh && echo && echo VERSION INSTALADA: && curl -s http://localhost:5080/api/salud && echo" || goto error
 
 echo.

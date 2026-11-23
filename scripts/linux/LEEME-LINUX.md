@@ -1,4 +1,4 @@
-# API de Reportes en Linux Mint (192.168.21.41)
+# API de Reportes en Ubuntu (192.168.20.25)
 
 ## 1. En tu PC Windows: generar el paquete
 1. Detén la API local si está abierta.
@@ -11,7 +11,7 @@
 ## 2. Copiarlo al servidor
 Desde una ventana de comandos de Windows (scp viene con Windows 10/11):
 ```
-scp ventasreportesapi-linux.tar.gz USUARIO@192.168.21.41:~
+scp ventasreportesapi-linux.tar.gz administrador@192.168.20.25:~
 ```
 (o con WinSCP / una memoria USB)
 
@@ -21,10 +21,10 @@ mkdir -p ~/ventasapi && tar -xzf ~/ventasreportesapi-linux.tar.gz -C ~/ventasapi
 cd ~/ventasapi
 sudo bash instalar-api.sh
 ```
-Al final debe decir: **API funcionando: http://192.168.21.41:5080/api/salud**
+Al final debe decir: **API funcionando: http://192.168.20.25:5080/api/salud**
 
 ## 4. Comprobar desde una PC Windows
-Abra en el navegador: http://192.168.21.41:5080/api/salud
+Abra en el navegador: http://192.168.20.25:5080/api/salud
 
 ## Uso diario
 | Acción | Comando |
