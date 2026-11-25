@@ -288,6 +288,7 @@ public sealed partial class Servidor
 
         // ------------------------------------------------------------------ ventas por categoría (una fila por artículo)
         // Ventas por categoría y Resumen por artículo usan la MISMA consulta (y la misma caché): cada uno con su permiso.
+        // En /api/articulos, si el usuario no tiene "articulos_montos", se envían los montos en cero sin mutar la caché compartida.
         foreach (var (ruta, permiso, nombre, etiqueta) in new[]
         {
             ("/api/categorias", "categorias", "ventas por categoría", " (categorías)"),
@@ -306,10 +307,11 @@ public sealed partial class Servidor
                 string Tri(string? v) => v is "0" or "1" ? v : "";
 
                 string nf = Tri(p.NoFiscal), cr = Tri(p.Credito);
+                bool ocultarMontos = ruta == "/api/articulos" && !u.Tiene("articulos_montos");
                 return await ConsultarTienda(ctx, u, "categorias", permitida, p.Desde, p.Hasta, caja + "|" + nf + "|" + cr, etiqueta,
                     tk => ConsultaCategorias.EjecutarAsync(CadenaObligatoria(permitida), p.Desde, p.Hasta, caja, nf, cr, timeoutSeg, tk),
                     r => r.Count,
-                    r => new { sucursal = permitida, filas = r });
+                    r => new { sucursal = permitida, filas = ocultarMontos ? SinMontosArticulos(r) : r });
             });
         }
 
@@ -330,5 +332,23 @@ public sealed partial class Servidor
                     ventaBruta = r.VentaBruta, devoluciones = r.Devoluciones, ventaNeta = r.VentaNeta, unidades = r.Unidades
                 });
         });
+    }
+
+    /// <summary>
+    /// Devuelve una copia de las filas de artículos con las columnas de montos (índices 6+) en cero,
+    /// sin mutar los arreglos almacenados en la caché compartida con /api/categorias.
+    /// </summary>
+    internal static List<object?[]> SinMontosArticulos(List<object?[]> filas)
+    {
+        var copia = new List<object?[]>(filas.Count);
+        foreach (var f in filas)
+        {
+            var nf = new object?[f.Length];
+            int conservar = Math.Min(6, f.Length);
+            Array.Copy(f, nf, conservar);
+            for (int i = conservar; i < nf.Length; i++) nf[i] = 0m;
+            copia.Add(nf);
+        }
+        return copia;
     }
 }

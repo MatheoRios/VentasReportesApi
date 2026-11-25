@@ -38,9 +38,9 @@ public sealed partial class Almacen
     public static readonly string[] Roles = { "ADMIN", "JEFE", "REGIONAL", "TIENDA" };
     public static readonly string[] RolesDeJefe = { "REGIONAL", "TIENDA" };   // roles que un JEFE puede asignar
     /// <summary>Reportes / módulos que se pueden permitir a cada usuario.</summary>
-    public static readonly string[] PermisosReporte = { "ventas", "resumen", "categorias", "articulos", "productos", "diario", "cierres", "listado", "compras", "consolidar", "chat", "impuestos", "entradas" };
-    /// <summary>Lo que recibe un usuario sin permisos guardados o creado por un Jefe: todo menos lo sensible (costos de compra).</summary>
-    public static readonly string[] PermisosPorDefecto = PermisosReporte.Where(p => p != "compras" && p != "impuestos").ToArray();   // costos e impuestos: solo a quien se le asigna
+    public static readonly string[] PermisosReporte = { "ventas", "resumen", "categorias", "articulos", "articulos_montos", "productos", "diario", "cierres", "listado", "compras", "consolidar", "chat", "impuestos", "entradas" };
+    /// <summary>Lo que recibe un usuario sin permisos guardados o creado por un Jefe: todo menos lo sensible (costos de compra, impuestos y montos en Resumen por artículo).</summary>
+    public static readonly string[] PermisosPorDefecto = PermisosReporte.Where(p => p != "compras" && p != "impuestos" && p != "articulos_montos").ToArray();   // costos, impuestos y montos en artículos: solo a quien se le asigna
     public static List<string> NormalizarPermisos(IEnumerable<string>? lista) =>
         (lista ?? Array.Empty<string>()).Select(p => (p ?? "").Trim().ToLowerInvariant())
             .Where(p => PermisosReporte.Contains(p)).Distinct().OrderBy(p => Array.IndexOf(PermisosReporte, p)).ToList();

@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>VentasReportesApi</RootNamespace>
     <AssemblyName>VentasReportesApi</AssemblyName>
-    <Version>1.31.0</Version>
+    <Version>1.32.0</Version>
     <InvariantGlobalization>false</InvariantGlobalization>
     <DefaultItemExcludes>$(DefaultItemExcludes);VentasReportesApi.Tests\**;scripts\**;docs\**</DefaultItemExcludes>
   </PropertyGroup>

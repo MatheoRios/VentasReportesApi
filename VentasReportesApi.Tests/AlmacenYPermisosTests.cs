@@ -83,12 +83,48 @@ public class AlmacenYPermisosTests
         Assert.IsTrue(jefe.PuedeEditar(reg));
         Assert.IsTrue(jefe.PuedeEditar(tienda));
 
-        // Por defecto (Permisos == null) NO incluye compras ni impuestos; ADMIN siempre tiene todos
+        // Por defecto (Permisos == null) NO incluye compras, impuestos ni montos en artículos; ADMIN siempre tiene todos
         Assert.IsTrue(admin.Tiene("compras"));
         Assert.IsTrue(admin.Tiene("impuestos"));
+        Assert.IsTrue(admin.Tiene("articulos_montos"));
         Assert.IsFalse(tienda.Tiene("compras"));
         Assert.IsFalse(tienda.Tiene("impuestos"));
+        Assert.IsFalse(tienda.Tiene("articulos_montos"));
         Assert.IsTrue(tienda.Tiene("ventas"));
+        Assert.IsTrue(tienda.Tiene("articulos"));
+
+        CollectionAssert.DoesNotContain(Almacen.PermisosPorDefecto, "articulos_montos");
+        var conMontos = new Usuario
+        {
+            Login = "t2",
+            Rol = "TIENDA",
+            Permisos = string.Join(",", Almacen.NormalizarPermisos(new[] { "articulos", "articulos_montos" }))
+        };
+        Assert.IsTrue(conMontos.Tiene("articulos_montos"));
+    }
+
+    [TestMethod]
+    public void SinMontosArticulosOcultaImportesSinMutarCacheCompartida()
+    {
+        var original = new List<object?[]>
+        {
+            new object?[] { "VIVERES", "001", "ARROZ", "UND", 10m, 25m, 100m, 16m, 70m, 3600m, 576m, 2520m }
+        };
+
+        var filtrada = Servidor.SinMontosArticulos(original);
+
+        Assert.AreEqual(1, filtrada.Count);
+        Assert.AreEqual("VIVERES", filtrada[0][0]);
+        Assert.AreEqual("001", filtrada[0][1]);
+        Assert.AreEqual("ARROZ", filtrada[0][2]);
+        Assert.AreEqual("UND", filtrada[0][3]);
+        Assert.AreEqual(10m, filtrada[0][4]);
+        Assert.AreEqual(25m, filtrada[0][5]);
+        for (int i = 6; i < 12; i++) Assert.AreEqual(0m, filtrada[0][i]);
+
+        // La fila original en caché permanece intacta para /api/categorias y usuarios autorizados
+        Assert.AreEqual(100m, original[0][6]);
+        Assert.AreEqual(2520m, original[0][11]);
     }
 
     [TestMethod]
